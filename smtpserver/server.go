@@ -2398,6 +2398,18 @@ func (c *conn) submit(ctx context.Context, recvHdrFor func(string) string, msgWr
 	})
 	xcheckf(err, "read-only transaction")
 
+	// Enforce encrypted mail requirements.
+	confDynamic := mox.Conf.DynamicConfig()
+	if confDynamic.Chatmail.Enabled {
+		encryptionOk, err := ValidateEncryptedEmail(header.Get("Subject"), header.Get("Content-Type"), header.Get("SecureJoin"), msgFrom, c.recipients, dataFile)
+		if err != nil {
+			xsmtpUserErrorf(smtp.C451LocalErr, smtp.SeMsg6Other0, "requested action aborted: local error in processing")
+		}
+		if !encryptionOk {
+			xsmtpUserErrorf(smtp.C523EncryptionNeeded, smtp.SePol7Other0, "invalid unencrypted mail")
+		}
+	}
+
 	// We gather any X-Mox-Extra-* headers into the "extra" data during queueing, which
 	// will make it into any webhook we deliver.
 	// todo: remove the X-Mox-Extra-* headers from the message. we don't currently rewrite the message...
