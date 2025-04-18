@@ -2634,6 +2634,18 @@ func (c *conn) deliver(ctx context.Context, recvHdrFor func(string) string, msgW
 		c.log.Infox("parsing message for From address", err)
 	}
 
+	// Enforce encrypted mail requirements.
+	confDynamic := mox.Conf.DynamicConfig()
+	if confDynamic.Chatmail.Enabled {
+		encryptionOk, err := ValidateEncryptedEmail(headers.Get("Subject"), headers.Get("Content-Type"), headers.Get("SecureJoin"), msgFrom, c.recipients, dataFile)
+		if err != nil {
+			xsmtpUserErrorf(smtp.C451LocalErr, smtp.SeMsg6Other0, "requested action aborted: local error in processing")
+		}
+		if !encryptionOk {
+			xsmtpUserErrorf(smtp.C523EncryptionNeeded, smtp.SePol7Other0, "invalid unencrypted mail")
+		}
+	}
+
 	// Basic loop detection. ../rfc/5321:4065 ../rfc/5321:1526
 	if len(headers.Values("Received")) > 100 {
 		xsmtpUserErrorf(smtp.C550MailboxUnavail, smtp.SeNet4Loop6, "loop detected, more than 100 Received headers")
