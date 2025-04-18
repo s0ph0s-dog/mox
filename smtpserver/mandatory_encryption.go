@@ -277,7 +277,13 @@ func ValidateEncryptedEmail(subject, content_type, secureJoinHdr string, mailFro
 	if mail_encrypted || mail_securejoin {
 		return true, nil
 	}
-	// TODO: explicitly allow autocrypt setup messages.
+	if len(rcptTos) == 1 && rcptTos[0].Addr.String() == mailFrom.String() {
+		if subject == "Autocrypt Setup Message" {
+			if content_type == "multipart/mixed" {
+				return true, nil
+			}
+		}
+	}
 	for _, recipient := range rcptTos {
 		recipient_str := recipient.Addr.String()
 		if from_str == recipient_str {
