@@ -222,7 +222,11 @@ func IsValidSecureJoinMessage(content_type string, secureJoinHdr string, body io
 		if strings.HasPrefix(part_content_type, "multipart/") {
 			return false, nil
 		}
-		if part_content_type != "text/plain" {
+		partmtype, _, err := mime.ParseMediaType(part_content_type)
+		if err != nil {
+			return false, err
+		}
+		if partmtype != "text/plain" {
 			return false, nil
 		}
 		part_body, err := io.ReadAll(part)
