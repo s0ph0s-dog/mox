@@ -1,0 +1,2 @@
+# Don't mangle line endings in test email files.
+*.eml text eof=crlf

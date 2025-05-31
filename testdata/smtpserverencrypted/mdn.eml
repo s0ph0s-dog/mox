@@ -1,6 +1,6 @@
 Subject: Message opened
 From: <{{.FromAddr}}>
-To: <{{.FromAddr}}>
+To: <{{.ToAddr}}>
 Date: Sun, 15 Oct 2023 16:43:25 +0000
 Message-ID: <Mr.78MWtlV7RAi.goCFzBhCYfy@c2.testrun.org>
 Auto-Submitted: auto-replied
