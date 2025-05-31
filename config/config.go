@@ -210,12 +210,14 @@ type Listener struct {
 		NonTLS  bool `sconf:"optional" sconf-doc:"If set, plain HTTP instead of HTTPS is spoken on the configured port. Can be useful when the mta-sts domain is reverse proxied."`
 	} `sconf:"optional" sconf-doc:"Serve MTA-STS policies describing SMTP TLS requirements. Requires a TLS config."`
 	WebserverHTTP struct {
-		Enabled bool
-		Port    int `sconf:"optional" sconf-doc:"Port for plain HTTP (non-TLS) webserver."`
+		Enabled           bool
+		Port              int  `sconf:"optional" sconf-doc:"Port for plain HTTP (non-TLS) webserver."`
+		RateLimitDisabled bool `sconf:"optional" sconf-doc:"Disable rate limiting for all requests to this port."`
 	} `sconf:"optional" sconf-doc:"All configured WebHandlers will serve on an enabled listener."`
 	WebserverHTTPS struct {
-		Enabled bool
-		Port    int `sconf:"optional" sconf-doc:"Port for HTTPS webserver."`
+		Enabled           bool
+		Port              int  `sconf:"optional" sconf-doc:"Port for HTTPS webserver."`
+		RateLimitDisabled bool `sconf:"optional" sconf-doc:"Disable rate limiting for all requests to this port."`
 	} `sconf:"optional" sconf-doc:"All configured WebHandlers will serve on an enabled listener. Either ACME must be configured, or for each WebHandler domain a TLS certificate must be configured."`
 }
 
@@ -236,6 +238,7 @@ type Transport struct {
 	SMTP        *TransportSMTP   `sconf:"optional" sconf-doc:"SMTP over a plain connection (possibly with STARTTLS), typically for old-fashioned unauthenticated relaying to a remote queue."`
 	Socks       *TransportSocks  `sconf:"optional" sconf-doc:"Like regular direct delivery, but makes outgoing connections through a SOCKS proxy."`
 	Direct      *TransportDirect `sconf:"optional" sconf-doc:"Like regular direct delivery, but allows to tweak outgoing connections."`
+	Fail        *TransportFail   `sconf:"optional" sconf-doc:"Immediately fails the delivery attempt."`
 }
 
 // TransportSMTP delivers messages by "submission" (SMTP, typically
@@ -277,6 +280,16 @@ type TransportDirect struct {
 	DisableIPv6 bool `sconf:"optional" sconf-doc:"If set, outgoing SMTP connections will *NOT* use IPv6 addresses to connect to remote SMTP servers."`
 
 	IPFamily string `sconf:"-" json:"-"`
+}
+
+// TransportFail is a transport that fails all delivery attempts.
+type TransportFail struct {
+	SMTPCode    int    `sconf:"optional" sconf-doc:"SMTP error code and optional enhanced error code to use for the failure. If empty, 554 is used (transaction failed)."`
+	SMTPMessage string `sconf:"optional" sconf-doc:"Message to include for the rejection. It will be shown in the DSN."`
+
+	// Effective values to use, set when parsing.
+	Code    int    `sconf:"-"`
+	Message string `sconf:"-"`
 }
 
 type Domain struct {
