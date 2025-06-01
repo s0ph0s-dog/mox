@@ -4,6 +4,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net/mail"
 	"encoding/base64"
 	"strings"
 	"slices"
@@ -257,7 +258,7 @@ func IsValidSecureJoinMessage(content_type string, secureJoinHdr string, body io
 // to the client.
 // The boolean return value is true when the email should be allowed, and false
 // when the email should be rejected with SMTP 523 Encryption Required.
-func ValidateEncryptedEmail(subject, content_type, secureJoinHdr string, mailFrom smtp.Address, rcptTos []recipient, body io.Reader) (bool, error) {
+func ValidateEncryptedEmail(subject, content_type, secureJoinHdr string, mailFrom smtp.Address, rcptTos []recipient, fullMsg io.Reader) (bool, error) {
 	confDynamic := mox.Conf.DynamicConfig()
 	if !confDynamic.Chatmail.Enabled {
 		return true, nil
@@ -266,6 +267,16 @@ func ValidateEncryptedEmail(subject, content_type, secureJoinHdr string, mailFro
 	if slices.Contains(confDynamic.Chatmail.AllowPlaintextFrom, from_str) {
 		return true, nil
 	}
+	msg, err := mail.ReadMessage(fullMsg)
+	if err != nil {
+		return false, err
+	}
+	body := msg.Body
+	// WARNING: you can only read from body once.  Without adding complex
+	// io.TeeReader tricks, any functions which use body from here down must be
+	// designed so that for ANY input, AT MOST ONE function reads from body.
+	// I have attempted to test for this in mandatory_encryption_test.go with the
+	// TestEncryptionValidateEmailAtMostOneBodyRead function.
 	mail_encrypted, err := IsValidEncryptedMessage(
 		subject,
 		content_type,

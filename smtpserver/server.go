@@ -2401,7 +2401,9 @@ func (c *conn) submit(ctx context.Context, recvHdrFor func(string) string, msgWr
 	// Enforce encrypted mail requirements.
 	confDynamic := mox.Conf.DynamicConfig()
 	if confDynamic.Chatmail.Enabled {
+		dataFile.Seek(0, 0)
 		encryptionOk, err := ValidateEncryptedEmail(header.Get("Subject"), header.Get("Content-Type"), header.Get("SecureJoin"), msgFrom, c.recipients, dataFile)
+		c.log.Debugx("valdiate encrypted email", err, slog.Bool("encrypted", encryptionOk))
 		if err != nil {
 			xsmtpUserErrorf(smtp.C451LocalErr, smtp.SeMsg6Other0, "requested action aborted: local error in processing")
 		}
@@ -2637,7 +2639,9 @@ func (c *conn) deliver(ctx context.Context, recvHdrFor func(string) string, msgW
 	// Enforce encrypted mail requirements.
 	confDynamic := mox.Conf.DynamicConfig()
 	if confDynamic.Chatmail.Enabled {
+		dataFile.Seek(0, 0)
 		encryptionOk, err := ValidateEncryptedEmail(headers.Get("Subject"), headers.Get("Content-Type"), headers.Get("SecureJoin"), msgFrom, c.recipients, dataFile)
+		c.log.Debugx("valdiate encrypted email", err, slog.Bool("encrypted", encryptionOk))
 		if err != nil {
 			xsmtpUserErrorf(smtp.C451LocalErr, smtp.SeMsg6Other0, "requested action aborted: local error in processing")
 		}

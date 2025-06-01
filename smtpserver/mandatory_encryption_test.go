@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"math/big"
 	"net/mail"
 	"path/filepath"
+	"strings"
 	"testing"
 	"text/template"
 
@@ -50,7 +52,7 @@ func emlctx_default_subject(from_addr string, to_addr string) emlctx {
 	return emlctx{from_addr, to_addr, "..."}
 }
 
-func loademailmsg(filename string, ctx emlctx) *mail.Message {
+func loademailmsg(filename string, ctx emlctx) (*mail.Message, io.Reader) {
 	path := filepath.Join("..", "testdata", "smtpserverencrypted", filename)
 	t, err := template.ParseFiles(path)
 	if err != nil {
@@ -61,11 +63,12 @@ func loademailmsg(filename string, ctx emlctx) *mail.Message {
 	if err != nil {
 		panic(err)
 	}
-	msg, err := mail.ReadMessage(&tmpl)
+	rawmsg := tmpl.String()
+	msg, err := mail.ReadMessage(strings.NewReader(rawmsg))
 	if err != nil {
 		panic(err)
 	}
-	return msg
+	return msg, strings.NewReader(rawmsg)
 }
 
 /*
@@ -92,18 +95,18 @@ func setenvelope(cm *ChatmailMilter, mailFrom string, rcptTos []string) {
 */
 
 func test_is_valid_encrypted_message(filename string, ctx emlctx) (bool, error) {
-	msg := loademailmsg(filename, ctx)
+	msg, _ := loademailmsg(filename, ctx)
 	return IsValidEncryptedMessage(ctx.Subject, msg.Header.Get("Content-Type"), msg.Body)
 }
 
 func test_is_valid_securejoin_message(filename string, ctx emlctx) (bool, error) {
-	msg := loademailmsg(filename, ctx)
+	msg, _ := loademailmsg(filename, ctx)
 	return IsValidSecureJoinMessage(msg.Header.Get("Content-Type"), msg.Header.Get("Secure-Join"), msg.Body)
 }
 
 func test_validate_encrypted_message(filename string, ctx emlctx) (bool, error) {
 	mox.Conf.Dynamic.Chatmail.Enabled = true
-	msg := loademailmsg(filename, ctx)
+	msg, raw := loademailmsg(filename, ctx)
 	from, err := smtp.ParseAddress(ctx.FromAddr)
 	if err != nil {
 		return false, fmt.Errorf("The test address %s is not a valid email address.", ctx.FromAddr)
@@ -128,7 +131,7 @@ func test_validate_encrypted_message(filename string, ctx emlctx) (bool, error) 
 		msg.Header.Get("Secure-Join"),
 		from,
 		[]recipient{rcpt},
-		msg.Body,
+		raw,
 	)
 }
 
@@ -274,6 +277,29 @@ func TestEncryptionAllowAutocryptSetupMessage(t *testing.T) {
 		t.Fatalf("ValidateEncryptedEmail() with valid Autocrypt Setup Message = %t, %v; want %t, nil", result, err, want)
 	}
 
+}
+
+func TestEncryptionValidateEmailAtMostOneBodyRead(t *testing.T) {
+	from_addr := "a@external.example"
+	to_addr := "b@external.example"
+	subject := "..."
+	ctx := emlctx{from_addr, to_addr, subject}
+
+	// Real Securejoin message, which should be accepted, and should not fail with
+	// an EOF error from the email body reader.  See warning comment in
+	// smtpserver/mandatory_encryption.go:ValidateEncryptedEmail.
+	result, err := test_validate_encrypted_message("securejoin-vc.eml", ctx)
+	want := true
+	if err != nil || result != want {
+		t.Fatalf("ValidateEncryptedEmail() with real SecureJoin message = %t, %v; want %t, nil", result, err, want)
+	}
+
+	// Fake Securejoin message with the headers, but spam contents.
+	result, err = test_is_valid_securejoin_message("securejoin-vc-fake.eml", ctx)
+	want = false
+	if err != nil || result != want {
+		t.Fatalf("IsValidSecureJoinMessage() with fake SecureJoin message = %t, %v; want %t, nil", result, err, want)
+	}
 }
 
 // TODO: port test_cleartext_send_fails

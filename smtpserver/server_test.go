@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/mjl-/bstore"
@@ -2152,5 +2153,121 @@ func TestDestinationMessageAuthRequiredSMTPError(t *testing.T) {
 		rcptTo := "msgauthrequired@mox.example"
 		err := client.Deliver(ctxbg, mailFrom, rcptTo, int64(len(deliverMessage)), strings.NewReader(deliverMessage), false, false, false)
 		ts.smtpErr(err, nil)
+	})
+}
+
+func loadtestmsg(filename, fromAddr, toAddr, subject string) string {
+	type secretCtx struct {
+		FromAddr string
+		ToAddr string
+		Subject string
+	};
+	templateData := secretCtx{
+		fromAddr,
+		toAddr,
+		subject,
+	}
+	path := filepath.Join("..", "testdata", "smtpserverencrypted", filename)
+	t, err := template.ParseFiles(path)
+	if err != nil {
+		panic(err)
+	}
+	var tmpl bytes.Buffer
+	err = t.Execute(&tmpl, &templateData)
+	if err != nil {
+		panic(err)
+	}
+	return tmpl.String()
+}
+
+func TestMandatoryEncryption(t *testing.T) {
+	resolver := dns.MockResolver{
+		A: map[string][]string{
+			"example.org.": {"127.0.0.10"}, // For mx check.
+		},
+		PTR: map[string][]string{
+			"127.0.0.10": {"example.org."},
+		},
+	}
+	ts := newTestServer(t, filepath.FromSlash("../testdata/smtp/mox.conf"), resolver)
+	defer ts.close()
+
+	// Set DKIM signing config.
+	dom, _ := mox.Conf.Domain(dns.Domain{ASCII: "mox.example"})
+	sel := config.Selector{
+		HashEffective:    "sha256",
+		HeadersEffective: []string{"From", "To", "Subject"},
+		Key:              ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)), // Fake key, don't use for real.
+		Domain:           dns.Domain{ASCII: "mox.example"},
+	}
+	dom.DKIM = config.DKIM{
+		Selectors: map[string]config.Selector{"testsel": sel},
+		Sign:      []string{"testsel"},
+	}
+	mox.Conf.Dynamic.Domains["mox.example"] = dom
+
+	// Enable chatmail mode (because this test is only for chatmail mode)
+	mox.Conf.Dynamic.Chatmail.Enabled = true
+
+	remote := "remote@example.org"
+	local := "mjl@mox.example"
+	subj := "Encrypted Message"
+
+	sendTestMails := func(client *smtpclient.Client, mailFrom, rcptTo, kind string) {
+		t.Helper()
+		// Test valid encrypted message
+		encrypted := loadtestmsg("encrypted.eml", mailFrom, rcptTo, subj)
+		err := client.Deliver(
+			ctxbg,
+			mailFrom,
+			rcptTo,
+			int64(len(encrypted)),
+			strings.NewReader(encrypted),
+			false,
+			false,
+			false,
+		)
+		tcheck(t, err, "encrypted mail " + kind)
+
+		// Test invalid unencrypted message
+		plain := loadtestmsg("plain.eml", mailFrom, rcptTo, subj)
+		err = client.Deliver(
+			ctxbg,
+			mailFrom,
+			rcptTo,
+			int64(len(plain)),
+			strings.NewReader(plain),
+			false,
+			false,
+			false,
+		)
+		ts.smtpErr(
+			err,
+			&smtpclient.Error{
+				Permanent: true,
+				Code: smtp.C523EncryptionNeeded,
+				Secode: smtp.SePol7Other0,
+			},
+		)
+	}
+
+	// Delivery tests.
+	ts.run(func(client *smtpclient.Client) {
+		sendTestMails(client, remote, local, "delivery")
+	})
+
+	// Submission tests.
+	ts.submission = true
+	ts.auth = func(mechanisms []string, cs *tls.ConnectionState) (sasl.Client, error) {
+		return sasl.NewClientPlain(local, password0), nil
+	}
+	ts.runx(func(err error, client *smtpclient.Client) {
+		if err != nil {
+			t.Fatalf("got err:\n%#v (%q)\nexpected:\n%#v", err, err, nil)
+		}
+		if err == nil {
+			sendTestMails(client, local, remote, "submission")
+		}
+		checkEvaluationCount(t, 0)
 	})
 }
