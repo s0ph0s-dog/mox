@@ -903,7 +903,7 @@ func serve(listenerName string, cid int64, tlsConfig *tls.Config, nc net.Conn, x
 	defer mox.Connections.Unregister(nc)
 
 	if preauthAddress != "" {
-		acc, _, _, err := store.OpenEmail(c.log, preauthAddress, false)
+		acc, _, _, _, err := store.OpenEmail(c.log, preauthAddress, false)
 		if err != nil {
 			c.log.Debugx("open account for preauth address", err, slog.String("address", preauthAddress))
 			c.xwritelinef("* BYE open account for address: %s", err)
@@ -1098,7 +1098,7 @@ func (c *conn) tlsClientAuthVerifyPeerCertParsed(cert *x509.Certificate) error {
 	// will be done before credentials can be used, and login disabled will be checked
 	// then, where it will result in a more helpful error message.
 	checkLoginDisabled := !pubKey.NoIMAPPreauth
-	acc, accName, _, err := store.OpenEmail(c.log, pubKey.LoginAddress, checkLoginDisabled)
+	acc, accName, _, _, err := store.OpenEmail(c.log, pubKey.LoginAddress, checkLoginDisabled)
 	c.loginAttempt.AccountName = accName
 	if err != nil {
 		if errors.Is(err, store.ErrLoginDisabled) {
@@ -2715,7 +2715,7 @@ func (c *conn) cmdAuthenticate(tag, cmd string, p *parser) {
 		c.loginAttempt.LoginAddress = username
 		c.log.Debug("cram-md5 auth", slog.String("address", username))
 		var err error
-		account, c.loginAttempt.AccountName, _, err = store.OpenEmail(c.log, username, false)
+		account, c.loginAttempt.AccountName, _, _, err = store.OpenEmail(c.log, username, false)
 		if err != nil {
 			if errors.Is(err, store.ErrUnknownCredentials) {
 				c.loginAttempt.Result = store.AuthBadCredentials
@@ -2794,7 +2794,7 @@ func (c *conn) cmdAuthenticate(tag, cmd string, p *parser) {
 		c.loginAttempt.LoginAddress = username
 		c.log.Debug("scram auth", slog.String("authentication", username))
 		// We check for login being disabled when finishing.
-		account, c.loginAttempt.AccountName, _, err = store.OpenEmail(c.log, username, false)
+		account, c.loginAttempt.AccountName, _, _, err = store.OpenEmail(c.log, username, false)
 		if err != nil {
 			// todo: we could continue scram with a generated salt, deterministically generated
 			// from the username. that way we don't have to store anything but attackers cannot
@@ -2880,7 +2880,7 @@ func (c *conn) cmdAuthenticate(tag, cmd string, p *parser) {
 			c.loginAttempt.LoginAddress = username
 		}
 		var err error
-		account, c.loginAttempt.AccountName, _, err = store.OpenEmail(c.log, username, false)
+		account, c.loginAttempt.AccountName, _, _, err = store.OpenEmail(c.log, username, false)
 		xcheckf(err, "looking up username from tls client authentication")
 
 	default:

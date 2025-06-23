@@ -7455,11 +7455,54 @@
 					]
 				},
 				{
+					"Name": "Chatmail",
+					"Docs": "",
+					"Typewords": [
+						"Chatmail"
+					]
+				},
+				{
 					"Name": "MonitorDNSBLZones",
 					"Docs": "",
 					"Typewords": [
 						"[]",
 						"Domain"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Chatmail",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Enabled",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "AutoregistrationDisabled",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "AllowPlaintextFrom",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				},
+				{
+					"Name": "AllowPlaintextTo",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"string"
 					]
 				}
 			]

@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"maps"
 	"os"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/mjl-/mox/config"
 	"github.com/mjl-/mox/dns"
-	"github.com/mjl-/mox/junk"
 	"github.com/mjl-/mox/mlog"
 	"github.com/mjl-/mox/mox-"
 	"github.com/mjl-/mox/mtasts"
@@ -100,33 +98,6 @@ func MakeDKIMRSAKey(selector, domain dns.Domain) ([]byte, error) {
 		return nil, fmt.Errorf("encoding pem: %w", err)
 	}
 	return b.Bytes(), nil
-}
-
-// MakeAccountConfig returns a new account configuration for an email address.
-func MakeAccountConfig(addr smtp.Address) config.Account {
-	account := config.Account{
-		Domain: addr.Domain.Name(),
-		Destinations: map[string]config.Destination{
-			addr.String(): {},
-		},
-		RejectsMailbox: "Rejects",
-		JunkFilter: &config.JunkFilter{
-			Threshold: 0.95,
-			Params: junk.Params{
-				Onegrams:    true,
-				MaxPower:    .01,
-				TopWords:    10,
-				IgnoreWords: .1,
-				RareWords:   2,
-			},
-		},
-		NoCustomPassword: true,
-	}
-	account.AutomaticJunkFlags.Enabled = true
-	account.AutomaticJunkFlags.JunkMailboxRegexp = "^(junk|spam)"
-	account.AutomaticJunkFlags.NeutralMailboxRegexp = "^(inbox|neutral|postmaster|dmarc|tlsrpt|rejects)"
-	account.SubjectPass.Period = 12 * time.Hour
-	return account
 }
 
 func writeFile(log mlog.Log, path string, data []byte) error {
@@ -463,7 +434,7 @@ func DomainAdd(ctx context.Context, disabled bool, domain dns.Domain, accountNam
 	} else if accountName == "" {
 		return fmt.Errorf("%w: account name is empty", ErrRequest)
 	} else if !ok {
-		nc.Accounts[accountName] = MakeAccountConfig(smtp.NewAddress(localpart, domain))
+		nc.Accounts[accountName] = store.MakeAccountConfig(smtp.NewAddress(localpart, domain), false)
 	} else if accountName != mox.Conf.Static.Postmaster.Account {
 		nacc := nc.Accounts[accountName]
 		nd := map[string]config.Destination{}
@@ -636,61 +607,6 @@ func ConfigSave(ctx context.Context, xmodify func(config *config.Dynamic)) (rerr
 	return nil
 }
 
-// AccountAdd adds an account and an initial address and reloads the configuration.
-//
-// The new account does not have a password, so cannot yet log in. Email can be
-// delivered.
-//
-// Catchall addresses are not supported for AccountAdd. Add separately with AddressAdd.
-func AccountAdd(ctx context.Context, account, address string) (rerr error) {
-	log := pkglog.WithContext(ctx)
-	defer func() {
-		if rerr != nil {
-			log.Errorx("adding account", rerr, slog.String("account", account), slog.String("address", address))
-		}
-	}()
-
-	addr, err := smtp.ParseAddress(address)
-	if err != nil {
-		return fmt.Errorf("%w: parsing email address: %v", ErrRequest, err)
-	}
-
-	defer mox.Conf.DynamicLockUnlock()()
-
-	c := mox.Conf.Dynamic
-	if _, ok := c.Accounts[account]; ok {
-		return fmt.Errorf("%w: account already present", ErrRequest)
-	}
-
-	// Ensure the directory does not exist, e.g. due to pending account removal, or an
-	// otherwise failed cleanup.
-	accountDir := filepath.Join(mox.DataDirPath("accounts"), account)
-	if _, err := os.Stat(accountDir); err == nil {
-		return fmt.Errorf("%w: account directory %q already/still exists", ErrRequest, accountDir)
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf(`%w: stat account directory %q, expected "does not exist": %v`, ErrRequest, accountDir, err)
-	}
-
-	if err := checkAddressAvailable(addr); err != nil {
-		return fmt.Errorf("%w: address not available: %v", ErrRequest, err)
-	}
-
-	// Compose new config without modifying existing data structures. If we fail, we
-	// leave no trace.
-	nc := c
-	nc.Accounts = map[string]config.Account{}
-	for name, a := range c.Accounts {
-		nc.Accounts[name] = a
-	}
-	nc.Accounts[account] = MakeAccountConfig(addr)
-
-	if err := mox.WriteDynamicLocked(ctx, log, nc); err != nil {
-		return fmt.Errorf("writing domains.conf: %w", err)
-	}
-	log.Info("account added", slog.String("account", account), slog.Any("address", addr))
-	return nil
-}
-
 // AccountRemove removes an account and reloads the configuration.
 func AccountRemove(ctx context.Context, account string) (rerr error) {
 	log := pkglog.WithContext(ctx)
@@ -776,31 +692,6 @@ func AccountRemove(ctx context.Context, account string) (rerr error) {
 	return nil
 }
 
-// checkAddressAvailable checks that the address after canonicalization is not
-// already configured, and that its localpart does not contain a catchall
-// localpart separator.
-//
-// Must be called with config lock held.
-func checkAddressAvailable(addr smtp.Address) error {
-	dc, ok := mox.Conf.Dynamic.Domains[addr.Domain.Name()]
-	if !ok {
-		return fmt.Errorf("domain does not exist")
-	}
-	lp := mox.CanonicalLocalpart(addr.Localpart, dc)
-	if _, ok := mox.Conf.AccountDestinationsLocked[smtp.NewAddress(lp, addr.Domain).String()]; ok {
-		return fmt.Errorf("canonicalized address %s already configured", smtp.NewAddress(lp, addr.Domain))
-	}
-	for _, sep := range dc.LocalpartCatchallSeparatorsEffective {
-		if strings.Contains(string(addr.Localpart), sep) {
-			return fmt.Errorf("localpart cannot include domain catchall separator %s", sep)
-		}
-	}
-	if _, ok := dc.Aliases[lp.String()]; ok {
-		return fmt.Errorf("address in use as alias")
-	}
-	return nil
-}
-
 // AddressAdd adds an email address to an account and reloads the configuration. If
 // address starts with an @ it is treated as a catchall address for the domain.
 func AddressAdd(ctx context.Context, address, account string) (rerr error) {
@@ -838,7 +729,7 @@ func AddressAdd(ctx context.Context, address, account string) (rerr error) {
 			return fmt.Errorf("%w: parsing email address: %v", ErrRequest, err)
 		}
 
-		if err := checkAddressAvailable(addr); err != nil {
+		if err := store.CheckAddressAvailable(addr); err != nil {
 			return fmt.Errorf("%w: address not available: %v", ErrRequest, err)
 		}
 		destAddr = addr.String()

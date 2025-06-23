@@ -35,6 +35,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -3256,15 +3257,161 @@ func manageAuthCache() {
 	}
 }
 
+// MakeAccountConfig returns a new account configuration for an email address.
+func MakeAccountConfig(addr smtp.Address, forChatmail bool) config.Account {
+	var junkfilter *config.JunkFilter = nil
+	// Don't enable the junk filter for chatmail accounts.  All messages must be
+	// encrypted, so the junk filter has nothing meaningful to train on.
+	// Additionally, the junk filter takes time, and low latency is important to
+	// the user experience of email-as-instant-messaging.
+	if !forChatmail {
+		junkfilter = &config.JunkFilter{
+			Threshold: 0.95,
+			Params: junk.Params{
+				Onegrams:    true,
+				MaxPower:    .01,
+				TopWords:    10,
+				IgnoreWords: .1,
+				RareWords:   2,
+			},
+		}
+	}
+	account := config.Account{
+		Domain: addr.Domain.Name(),
+		Destinations: map[string]config.Destination{
+			addr.String(): {},
+		},
+		RejectsMailbox:   "Rejects",
+		JunkFilter:       junkfilter,
+		NoCustomPassword: true,
+	}
+	if forChatmail {
+		// Because all chatmail messages must be encrypted, this delay doesn't
+		// really accomplish anything other than slowing down the autocrypt
+		// handshake when starting a new chat with someone.
+		account.NoFirstTimeSenderDelay = true
+		// TODO: should this be set somewhere else?
+		account.QuotaMessageSize = 700 * 1024 * 1024 // 700 MB
+		// TODO: is this the right way to enforce this? I think you can send all
+		// 86,400 messages in one go right at the start of the day and then not send
+		// anything else for 24 hours, which seems bad.
+		account.MaxOutgoingMessagesPerDay = 60 * 60 * 24 // 60 msgs per minute
+	} else {
+		account.AutomaticJunkFlags.Enabled = true
+		account.AutomaticJunkFlags.JunkMailboxRegexp = "^(junk|spam)"
+		account.AutomaticJunkFlags.NeutralMailboxRegexp = "^(inbox|neutral|postmaster|dmarc|tlsrpt|rejects)"
+		account.SubjectPass.Period = 12 * time.Hour
+	}
+	return account
+}
+
+// checkAddressAvailable checks that the address after canonicalization is not
+// already configured, and that its localpart does not contain a catchall
+// localpart separator.
+//
+// Must be called with config lock held.
+func CheckAddressAvailable(addr smtp.Address) error {
+	dc, ok := mox.Conf.Dynamic.Domains[addr.Domain.Name()]
+	if !ok {
+		return fmt.Errorf("domain does not exist")
+	}
+	lp := mox.CanonicalLocalpart(addr.Localpart, dc)
+	if _, ok := mox.Conf.AccountDestinationsLocked[smtp.NewAddress(lp, addr.Domain).String()]; ok {
+		return fmt.Errorf("canonicalized address %s already configured", smtp.NewAddress(lp, addr.Domain))
+	}
+	for _, sep := range dc.LocalpartCatchallSeparatorsEffective {
+		if strings.Contains(string(addr.Localpart), sep) {
+			return fmt.Errorf("localpart cannot include domain catchall separator %s", sep)
+		}
+	}
+	if _, ok := dc.Aliases[lp.String()]; ok {
+		return fmt.Errorf("address in use as alias")
+	}
+	return nil
+}
+
+// AccountAdd adds an account and an initial address and reloads the configuration.
+//
+// The new account does not have a password, so cannot yet log in. Email can be
+// delivered.
+//
+// Catchall addresses are not supported for AccountAdd. Add separately with AddressAdd.
+func AccountAdd(log mlog.Log, account, address string, isChatmail bool) (rerr error) {
+	ErrRequest := errors.New("bad request")
+	defer func() {
+		if rerr != nil {
+			log.Errorx("adding account", rerr, slog.String("account", account), slog.String("address", address))
+		}
+	}()
+
+	addr, err := smtp.ParseAddress(address)
+	if err != nil {
+		return fmt.Errorf("%w: parsing email address: %v", ErrRequest, err)
+	}
+
+	defer mox.Conf.DynamicLockUnlock()()
+
+	c := mox.Conf.Dynamic
+	if _, ok := c.Accounts[account]; ok {
+		return fmt.Errorf("%w: account already present", ErrRequest)
+	}
+
+	// Ensure the directory does not exist, e.g. due to pending account removal, or an
+	// otherwise failed cleanup.
+	accountDir := filepath.Join(mox.DataDirPath("accounts"), account)
+	if _, err := os.Stat(accountDir); err == nil {
+		return fmt.Errorf("%w: account directory %q already/still exists", ErrRequest, accountDir)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf(`%w: stat account directory %q, expected "does not exist": %v`, ErrRequest, accountDir, err)
+	}
+
+	if err := CheckAddressAvailable(addr); err != nil {
+		return fmt.Errorf("%w: address not available: %v", ErrRequest, err)
+	}
+
+	// Compose new config without modifying existing data structures. If we fail, we
+	// leave no trace.
+	nc := c
+	nc.Accounts = map[string]config.Account{}
+	maps.Copy(nc.Accounts, c.Accounts)
+	nc.Accounts[account] = MakeAccountConfig(addr, isChatmail)
+
+	// As of writing this, none of the functions in the call chain from this point
+	// use the context for anything.  There is no context available in this
+	// module, so pass a dummy context.
+	dummyCtx := context.TODO()
+	if err := mox.WriteDynamicLocked(dummyCtx, log, nc); err != nil {
+		return fmt.Errorf("writing domains.conf: %w", err)
+	}
+	log.Info("account added", slog.String("account", account), slog.Any("address", addr))
+	return nil
+}
+
+var loginMu sync.Mutex
+
 // OpenEmailAuth opens an account given an email address and password.
 //
 // The email address may contain a catchall separator.
 // For invalid credentials, a nil account is returned, but accName may be
 // non-empty.
 func OpenEmailAuth(log mlog.Log, email string, password string, checkLoginDisabled bool) (racc *Account, raccName string, rerr error) {
+	// Delta Chat tries to log in via IMAP and SMTP simultaneously when creating
+	// an account.  I tried to surgically lock only the smallest part necessary:
+	// * Just the AccountNew function led to race conditions that caused the
+	//   slower login attempt to fail because the account already existed.
+	// * AccountNew + OpenAuth led to race conditions where the password wasn't
+	//   set yet
+	// * OpenEmailAuth is the first scope that actually worked reliably.
+	// I don't like locking the whole password-based login process behind a mutex,
+	// so I'll revisit this later to see if there's a better solution.
+	log.Debug("trying to get openemailauth lock")
+	loginMu.Lock()
+	defer loginMu.Unlock()
+	log.Debug("got openemailauth lock")
+
 	// We check for LoginDisabled after verifying the password. Otherwise users can get
 	// messages about the account being disabled without knowing the password.
-	acc, accName, _, err := OpenEmail(log, email, false)
+	acc, accName, _, justCreated, err := OpenEmail(log, email, false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -3276,6 +3423,17 @@ func OpenEmailAuth(log mlog.Log, email string, password string, checkLoginDisabl
 			acc = nil
 		}
 	}()
+
+	// I am uneasy about "reset the account password" being one boolean flip away
+	// for an attacker.  I'm not sure whether that's worth engineering around.
+	log.Info("should set password?", slog.Any("isNewAcct", justCreated))
+	if justCreated {
+		err = acc.SetPassword(log, password)
+		if err != nil {
+			log.Warnx("could not set password", err)
+			return nil, "", fmt.Errorf("error setting password on first use for new chatmail account: %v", err)
+		}
+	}
 
 	password, err = precis.OpaqueString.String(password)
 	if err != nil {
@@ -3311,27 +3469,97 @@ func OpenEmailAuth(log mlog.Log, email string, password string, checkLoginDisabl
 	return acc, accName, nil
 }
 
+func isAutoregisterProhibitedLocalpart(addr smtp.Address) bool {
+	switch strings.ToLower(addr.Localpart.String()) {
+	// Not sure where this is standardized
+	case "mailer-daemon":
+		fallthrough
+		// From the OpenSMPTD default configuration file of common aliases:
+	case "daemon":
+		fallthrough
+	case "ftp-bugs":
+		fallthrough
+	case "operator":
+		fallthrough
+	case "root":
+		fallthrough
+	case "manager":
+		fallthrough
+	case "dumper":
+		fallthrough
+		// RFC 2142 4. NETWORK OPERATIONS MAILBOX NAMES
+	case "abuse":
+		fallthrough
+	case "noc":
+		fallthrough
+	case "security":
+		fallthrough
+		// RFC 2142 5. SUPPORT MAILBOX NAMES FOR SPECIFIC INTERNET SERVICES
+	case "hostmaster":
+		fallthrough
+	case "usenet":
+		fallthrough
+	case "news":
+		fallthrough
+	case "postmaster":
+		fallthrough
+	case "webmaster":
+		fallthrough
+	case "www":
+		fallthrough
+	case "uucp":
+		fallthrough
+	case "ftp":
+		return true
+	default:
+		return false
+	}
+}
+
 // OpenEmail opens an account given an email address.
 //
 // The email address may contain a catchall separator.
 //
 // Returns account on success, may return non-empty account name even on error.
-func OpenEmail(log mlog.Log, email string, checkLoginDisabled bool) (*Account, string, config.Destination, error) {
+//
+// The bool return value reports whether the opened email account was just
+// created (and should thus have its password set by OpenEmailAuth).
+func OpenEmail(log mlog.Log, email string, checkLoginDisabled bool) (*Account, string, config.Destination, bool, error) {
 	addr, err := smtp.ParseAddress(email)
+	accountWasJustCreated := false
 	if err != nil {
-		return nil, "", config.Destination{}, fmt.Errorf("%w: %v", ErrUnknownCredentials, err)
+		return nil, "", config.Destination{}, false, fmt.Errorf("%w: %v", ErrUnknownCredentials, err)
 	}
+	confDynamic := mox.Conf.DynamicConfig()
+	shouldCreateAccount := confDynamic.Chatmail.Enabled && !confDynamic.Chatmail.AutoregistrationDisabled
 	accountName, _, _, dest, err := mox.LookupAddress(addr.Localpart, addr.Domain, false, false, false)
-	if err != nil && (errors.Is(err, mox.ErrAddressNotFound) || errors.Is(err, mox.ErrDomainNotFound)) {
-		return nil, accountName, config.Destination{}, ErrUnknownCredentials
+	if shouldCreateAccount && err != nil && (errors.Is(err, mox.ErrAddressNotFound)) {
+		log.Info("attempting autocreation because chatmail", slog.String("email", email))
+		if isAutoregisterProhibitedLocalpart(addr) {
+			return nil, "", config.Destination{}, false, fmt.Errorf("prohibited localpart in autoregistered chatmail account: %s", addr.Localpart.String())
+		}
+		accountName = addr.Localpart.String()
+		err = AccountAdd(log, accountName, email, true)
+		if err != nil {
+			log.Warnx("failed to create new chatmail account", err, slog.String("email", email))
+			return nil, accountName, config.Destination{}, false, fmt.Errorf("creating new chatmail account: %v", err)
+		}
+		log.Info("account created", slog.String("name", accountName))
+		accountWasJustCreated = true
+		acctConf, ok := mox.Conf.Account(accountName)
+		log.Debug("is account visible after creation", slog.Any("ok", ok), slog.Any("acctconf", acctConf))
+	} else if err != nil && (errors.Is(err, mox.ErrAddressNotFound) || errors.Is(err, mox.ErrDomainNotFound)) {
+		return nil, accountName, config.Destination{}, false, ErrUnknownCredentials
 	} else if err != nil {
-		return nil, accountName, config.Destination{}, fmt.Errorf("looking up address: %v", err)
+		return nil, accountName, config.Destination{}, false, fmt.Errorf("looking up address: %v", err)
 	}
+	acctConf, ok := mox.Conf.Account(accountName)
+	log.Debug("is account visible just prior to OpenAccount", slog.Any("ok", ok), slog.Any("acctconf", acctConf), slog.String("acctname", accountName))
 	acc, err := OpenAccount(log, accountName, checkLoginDisabled)
 	if err != nil {
-		return nil, accountName, config.Destination{}, err
+		return nil, accountName, config.Destination{}, false, err
 	}
-	return acc, accountName, dest, nil
+	return acc, accountName, dest, accountWasJustCreated, nil
 }
 
 // We store max 1<<shift files in each subdir of an account "msg" directory.

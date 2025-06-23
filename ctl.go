@@ -333,7 +333,7 @@ func servectlcmd(ctx context.Context, xctl *ctl, cid int64, shutdown func()) {
 		*/
 
 		to := xctl.xread()
-		a, _, addr, err := store.OpenEmail(log, to, false)
+		a, _, addr, _, err := store.OpenEmail(log, to, false)
 		xctl.xcheck(err, "lookup destination address")
 
 		msgFile, err := store.CreateMessageTemp(log, "ctl-deliver")
@@ -1041,7 +1041,7 @@ func servectlcmd(ctx context.Context, xctl *ctl, cid int64, shutdown func()) {
 		*/
 		account := xctl.xread()
 		address := xctl.xread()
-		err := admin.AccountAdd(ctx, account, address)
+		err := store.AccountAdd(xctl.log, account, address, false)
 		xctl.xcheck(err, "adding account")
 		xctl.xwriteok()
 
@@ -1178,7 +1178,7 @@ func servectlcmd(ctx context.Context, xctl *ctl, cid int64, shutdown func()) {
 		if name != "" {
 			tlspubkey.Name = name
 		}
-		acc, _, _, err := store.OpenEmail(xctl.log, loginAddress, false)
+		acc, _, _, _, err := store.OpenEmail(xctl.log, loginAddress, false)
 		xctl.xcheck(err, "open account for address")
 		defer func() {
 			err := acc.Close()

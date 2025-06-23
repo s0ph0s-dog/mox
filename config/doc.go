@@ -1502,6 +1502,31 @@ See https://pkg.go.dev/github.com/mjl-/sconf for details.
 	MonitorDNSBLs:
 		-
 
+	# Settings for Chatmail mode.  Chatmail is a specific set of configuration options
+	# that make Mox work better with email-based instant messaging applications like
+	# Delta Chat. (optional)
+	Chatmail:
+
+		# Enable the default set of options for Chatmail mode. (optional)
+		Enabled: false
+
+		# Prevent the automatic creation of new chatmail accounts. Normally, chatmail
+		# accounts can be created by simply logging in to the server with an unused
+		# username and a password.  If the server is under attack, being abused, or you
+		# simply don't want to allow just anyone to create an account, set this to true.
+		# (optional)
+		AutoregistrationDisabled: false
+
+		# A list of addresses which are always allowed to send plaintext email. (optional)
+		AllowPlaintextFrom:
+			-
+
+		# A list of addresses which are always allowed to receive plaintext mail. You
+		# should put your postmaster account here, otherwise you will not be able to
+		# receive abuse reports, delivery status notices, etc. (optional)
+		AllowPlaintextTo:
+			-
+
 # Examples
 
 Mox includes configuration files to illustrate common setups. You can see these

@@ -778,7 +778,7 @@ func (Account) TLSPublicKeyUpdate(ctx context.Context, pubKey store.TLSPublicKey
 	reqInfo := ctx.Value(requestInfoCtxKey).(requestInfo)
 	tpk := xtlspublickey(ctx, reqInfo.AccountName, pubKey.Fingerprint)
 	log := pkglog.WithContext(ctx)
-	acc, _, _, err := store.OpenEmail(log, pubKey.LoginAddress, false)
+	acc, _, _, _, err := store.OpenEmail(log, pubKey.LoginAddress, false)
 	if err == nil && acc.Name != reqInfo.AccountName {
 		err = store.ErrUnknownCredentials
 	}

@@ -1981,7 +1981,8 @@ func (Admin) DomainRemove(ctx context.Context, domain string) {
 // AccountAdd adds existing a new account, with an initial email address, and
 // reloads the configuration.
 func (Admin) AccountAdd(ctx context.Context, accountName, address string) {
-	err := admin.AccountAdd(ctx, accountName, address)
+	// TODO: allow creation of chatmail addresses in web UI? Probably not.
+	err := store.AccountAdd(pkglog, accountName, address, false)
 	xcheckf(ctx, err, "adding account")
 }
 

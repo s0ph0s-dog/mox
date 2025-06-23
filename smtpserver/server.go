@@ -549,7 +549,7 @@ func (c *conn) tlsClientAuthVerifyPeerCertParsed(cert *x509.Certificate) error {
 	// will be done before credentials can be used, and login disabled will be checked
 	// then, where it will result in a more helpful error message.
 	checkLoginDisabled := !pubKey.NoIMAPPreauth
-	acc, accName, _, err := store.OpenEmail(c.log, pubKey.LoginAddress, checkLoginDisabled)
+	acc, accName, _, _, err := store.OpenEmail(c.log, pubKey.LoginAddress, checkLoginDisabled)
 	la.AccountName = accName
 	if err != nil {
 		if errors.Is(err, store.ErrLoginDisabled) {
@@ -1479,7 +1479,7 @@ func (c *conn) cmdAuth(p *parser) {
 		la.LoginAddress = username
 		c.log.Debug("cram-md5 auth", slog.String("username", username))
 		var err error
-		account, la.AccountName, _, err = store.OpenEmail(c.log, username, false)
+		account, la.AccountName, _, _, err = store.OpenEmail(c.log, username, false)
 		if err != nil && errors.Is(err, store.ErrUnknownCredentials) {
 			la.Result = store.AuthBadCredentials
 			c.log.Info("failed authentication attempt", slog.String("username", username), slog.Any("remote", c.remoteIP))
@@ -1557,7 +1557,7 @@ func (c *conn) cmdAuth(p *parser) {
 		username = ss.Authentication
 		la.LoginAddress = username
 		c.log.Debug("scram auth", slog.String("authentication", username))
-		account, la.AccountName, _, err = store.OpenEmail(c.log, username, false)
+		account, la.AccountName, _, _, err = store.OpenEmail(c.log, username, false)
 		if err != nil {
 			// todo: we could continue scram with a generated salt, deterministically generated
 			// from the username. that way we don't have to store anything but attackers cannot
@@ -1646,7 +1646,7 @@ func (c *conn) cmdAuth(p *parser) {
 			la.LoginAddress = username
 		}
 		var err error
-		account, la.AccountName, _, err = store.OpenEmail(c.log, username, false)
+		account, la.AccountName, _, _, err = store.OpenEmail(c.log, username, false)
 		xcheckf(err, "looking up username from tls client authentication")
 
 	default:

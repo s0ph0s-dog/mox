@@ -891,7 +891,7 @@ and check the admin page for the needed DNS records.`)
 
 	mox.Conf.DynamicLastCheck = time.Now() // Prevent error logging by Make calls below.
 
-	accountConf := admin.MakeAccountConfig(addr)
+	accountConf := store.MakeAccountConfig(addr, false)
 	const withMTASTS = true
 	confDomain, keyPaths, err := admin.MakeDomainConfig(context.Background(), domain, dnshostname, accountName, withMTASTS)
 	if err != nil {
@@ -982,7 +982,7 @@ and check the admin page for the needed DNS records.`)
 		fatalf("cannot find domain in new config")
 	}
 
-	acc, _, _, err := store.OpenEmail(c.log, args[0], false)
+	acc, _, _, _, err := store.OpenEmail(c.log, args[0], false)
 	if err != nil {
 		fatalf("open account: %s", err)
 	}

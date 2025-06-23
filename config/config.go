@@ -113,7 +113,7 @@ type Dynamic struct {
 	WebHandlers        []WebHandler       `sconf:"optional" sconf-doc:"Handle webserver requests by serving static files, redirecting, reverse-proxying HTTP(s) or passing the request to an internal service. The first matching WebHandler will handle the request. Built-in system handlers, e.g. for ACME validation, autoconfig and mta-sts always run first. Built-in handlers for admin, account, webmail and webapi are evaluated after all handlers, including webhandlers (allowing for overrides of internal services for some domains). If no handler matches, the response status code is file not found (404). If webserver features are missing, forward the requests to an application that provides the needed functionality itself."`
 	Routes             []Route            `sconf:"optional" sconf-doc:"Routes for delivering outgoing messages through the queue. Each delivery attempt evaluates account routes, domain routes and finally these global routes. The transport of the first matching route is used in the delivery attempt. If no routes match, which is the default with no configured routes, messages are delivered directly from the queue."`
 	MonitorDNSBLs      []string           `sconf:"optional" sconf-doc:"DNS blocklists to periodically check with if IPs we send from are present, without using them for checking incoming deliveries.. Also see DNSBLs in SMTP listeners in mox.conf, which specifies DNSBLs to use both for incoming deliveries and for checking our IPs against. Example DNSBLs: sbl.spamhaus.org, bl.spamcop.net."`
-	Chatmail				    Chatmail          `sconf:"optional" sconf-doc:"Settings for Chatmail mode.  Chatmail is a specific set of configuration options that make Mox work better with email-based instant messaging applications like Delta Chat."`
+	Chatmail           Chatmail           `sconf:"optional" sconf-doc:"Settings for Chatmail mode.  Chatmail is a specific set of configuration options that make Mox work better with email-based instant messaging applications like Delta Chat."`
 
 	WebDNSDomainRedirects map[dns.Domain]dns.Domain `sconf:"-" json:"-"`
 	MonitorDNSBLZones     []dns.Domain              `sconf:"-"`
@@ -660,7 +660,8 @@ func (wi WebInternal) equal(o WebInternal) bool {
 }
 
 type Chatmail struct {
-	Enabled	bool	`sconf:"optional" sconf-doc:"Enable the default set of options for Chatmail mode."`
-	AllowPlaintextFrom []string `sconf:"optional" sconf-doc:"A list of addresses which are always allowed to send plaintext email."`
-	AllowPlaintextTo []string `sconf:"optional" sconf-doc:"A list of addresses which are always allowed to receive plaintext mail. You should put your postmaster account here, otherwise you will not be able to receive abuse reports, delivery status notices, etc."`
+	Enabled                  bool     `sconf:"optional" sconf-doc:"Enable the default set of options for Chatmail mode."`
+	AutoregistrationDisabled bool     `sconf:"optional" sconf-doc:"Prevent the automatic creation of new chatmail accounts. Normally, chatmail accounts can be created by simply logging in to the server with an unused username and a password.  If the server is under attack, being abused, or you simply don't want to allow just anyone to create an account, set this to true."`
+	AllowPlaintextFrom       []string `sconf:"optional" sconf-doc:"A list of addresses which are always allowed to send plaintext email."`
+	AllowPlaintextTo         []string `sconf:"optional" sconf-doc:"A list of addresses which are always allowed to receive plaintext mail. You should put your postmaster account here, otherwise you will not be able to receive abuse reports, delivery status notices, etc."`
 }
