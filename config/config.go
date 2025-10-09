@@ -191,6 +191,8 @@ type Listener struct {
 	WebmailHTTPS WebService `sconf:"optional" sconf-doc:"Webmail client, like WebmailHTTP, but for HTTPS. Requires a TLS config."`
 	WebAPIHTTP   WebService `sconf:"optional" sconf-doc:"Like WebAPIHTTPS, but with plain HTTP, without TLS."`
 	WebAPIHTTPS  WebService `sconf:"optional" sconf-doc:"WebAPI, a simple HTTP/JSON-based API for email, with HTTPS (requires a TLS config). Default path is /webapi/."`
+	ChatmailHTTP WebService `sconf:"optional" sconf-doc:"Like ChatmailHTTPS, but with plain HTTP, without TLS."`
+	ChatmailHTTPS WebService `sconf:"optional" sconf-doc:"Serve a chatmail relay account signup page.  Default path is /."`
 	MetricsHTTP  struct {
 		Enabled bool
 		Port    int `sconf:"optional" sconf-doc:"Default 8010."`
@@ -652,7 +654,7 @@ func (wf WebForward) equal(o WebForward) bool {
 
 type WebInternal struct {
 	BasePath string `sconf-doc:"Path to use as root of internal service, e.g. /webmail/."`
-	Service  string `sconf-doc:"Name of the service, values: admin, account, webmail, webapi."`
+	Service  string `sconf-doc:"Name of the service, values: admin, account, webmail, chatmail, webapi."`
 
 	Handler http.Handler `sconf:"-" json:"-"`
 }

@@ -41,6 +41,7 @@ import (
 	"github.com/mjl-/mox/webaccount"
 	"github.com/mjl-/mox/webadmin"
 	"github.com/mjl-/mox/webapisrv"
+	"github.com/mjl-/mox/webchatmailsrv"
 	"github.com/mjl-/mox/webmail"
 )
 
@@ -747,6 +748,28 @@ func portServes(name string, l config.Listener) map[int]*serve {
 		handler := mox.SafeHeaders(http.StripPrefix(strings.TrimRight(path, "/"), webapisrv.NewServer(maxMsgSize, path, l.WebAPIHTTPS.Forwarded)))
 		srv.ServiceHandle("webapi", accountHostMatch, path, handler)
 		redirectToTrailingSlash(srv, accountHostMatch, "webapi", path)
+	}
+
+	if l.ChatmailHTTP.Enabled {
+		port := config.Port(l.ChatmailHTTP.Port, 80)
+		path := "/"
+		if l.ChatmailHTTP.Path != "" {
+			path = l.ChatmailHTTP.Path
+		}
+		srv := ensureServe(false, l.ChatmailHTTP.Forwarded, false, port, "webchatmail-http at "+path, true)
+		handler := mox.SafeHeaders(http.StripPrefix(strings.TrimRight(path, "/"), webchatmailsrv.NewServer(path)))
+		srv.ServiceHandle("webchatmail", accountHostMatch, path, handler)
+	}
+	if l.ChatmailHTTPS.Enabled {
+		port := config.Port(l.ChatmailHTTPS.Port, 443)
+		path := "/"
+		if l.ChatmailHTTPS.Path != "" {
+			path = l.ChatmailHTTPS.Path
+		}
+		srv := ensureServe(true, l.ChatmailHTTPS.Forwarded, false, port, "webchatmail-https at "+path, true)
+		handler := mox.SafeHeaders(http.StripPrefix(strings.TrimRight(path, "/"), webchatmailsrv.NewServer(path)))
+		srv.ServiceHandle("webchatmail", accountHostMatch, path, handler)
+		redirectToTrailingSlash(srv, accountHostMatch, "webchatmail", path)
 	}
 
 	if l.WebmailHTTP.Enabled {

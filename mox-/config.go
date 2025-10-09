@@ -69,6 +69,7 @@ var NewWebmailHandler = func(maxMsgSize int64, basePath string, isForwarded bool
 	return nopHandler
 }
 var NewWebapiHandler = func(maxMsgSize int64, basePath string, isForwarded bool) http.Handler { return nopHandler }
+var NewChatmailHandler = func(basePath string) http.Handler { return nopHandler }
 
 var nopHandler = http.HandlerFunc(nil)
 
@@ -2105,6 +2106,8 @@ func prepareDynamicConfig(ctx context.Context, log mlog.Log, dynamicPath string,
 				wi.Handler = NewWebmailHandler(config.DefaultMaxMsgSize, wi.BasePath, isForwarded, accountPath)
 			case "webapi":
 				wi.Handler = NewWebapiHandler(config.DefaultMaxMsgSize, wi.BasePath, isForwarded)
+			case "chatmail":
+				wi.Handler = NewChatmailHandler(wi.BasePath)
 			default:
 				addHandlerErrorf("internal service: unknown service %q", wi.Service)
 			}
