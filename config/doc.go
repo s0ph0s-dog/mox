@@ -433,7 +433,7 @@ See https://pkg.go.dev/github.com/mjl-/sconf for details.
 				# limiting and for the "secure" status of cookies. (optional)
 				Forwarded: false
 
-			# Like WebAPIHTTP, but with plain HTTP, without TLS. (optional)
+			# Like WebAPIHTTPS, but with plain HTTP, without TLS. (optional)
 			WebAPIHTTP:
 				Enabled: false
 
@@ -1313,6 +1313,12 @@ See https://pkg.go.dev/github.com/mjl-/sconf for details.
 			# use of weak passwords. Custom account passwords can be set by the admin.
 			# (optional)
 			NoCustomPassword: false
+
+			# IMAP capabilities (upper-case) to disable on the connection after
+			# authentication. Useful if the account uses an email client with an incompatible
+			# implementation for a capability/extension. (optional)
+			IMAPCapabilitiesDisabled:
+				-
 
 			# Routes for delivering outgoing messages through the queue. Each delivery attempt
 			# evaluates these account routes, domain routes and finally global routes. The
