@@ -670,4 +670,6 @@ type Chatmail struct {
 	AutoregistrationDisabled bool     `sconf:"optional" sconf-doc:"Prevent the automatic creation of new chatmail accounts. Normally, chatmail accounts can be created by simply logging in to the server with an unused username and a password.  If the server is under attack, being abused, or you simply don't want to allow just anyone to create an account, set this to true."`
 	AllowPlaintextFrom       []string `sconf:"optional" sconf-doc:"A list of addresses which are always allowed to send plaintext email."`
 	AllowPlaintextTo         []string `sconf:"optional" sconf-doc:"A list of addresses which are always allowed to receive plaintext mail. You should put your postmaster account here, otherwise you will not be able to receive abuse reports, delivery status notices, etc."`
+	RelayRules							 []string `sconf:"optional" sconf-doc:"A list of rules for users of this chatmail relay."`
+	AbuseContactEmail				 string `sconf:"required" sconf-doc:"The email address where people can report abuse of your chatmail relay."`
 }

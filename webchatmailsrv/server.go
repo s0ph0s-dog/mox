@@ -49,7 +49,7 @@ func init() {
 	}
 }
 
-func templateIndex(domain, basePath, adminContact string) ([]byte, error) {
+func templateIndex(domain, basePath, adminContact string, relayRules []string) ([]byte, error) {
 	chatmailIndexTmpl := htmltemplate.Must(htmltemplate.New("index").Parse(`<!doctype html>
 <html>
 	<head>
@@ -64,7 +64,7 @@ h1 { font-size: 1.2rem; }
 h2 { font-size: 1.1rem; }
 h3, h4 { font-size: 1rem; }
 ul { padding-left: 1rem; }
-p { margin-bottom: 1em; max-width: 50em; }
+p, img { margin-bottom: 1em; max-width: 50em; }
 [title] { text-decoration: underline; text-decoration-style: dotted; }
 fieldset { border: 0; }
 		</style>
@@ -79,6 +79,14 @@ fieldset { border: 0; }
 			<li><p><strong>Choose</strong> your profile picture and name</p></li>
 			<li><p><strong>Start</strong> chatting with any Delta Chat contacts using QR invite codes</p></li>
 		</ul>
+		{{if .RelayRules}}
+		<h2>Rules for Use of This Relay</h2>
+		<ul>
+		  {{range .RelayRules}}
+			<li><p>{{.}}</p></li>
+			{{end}}
+		</ul>
+		{{end}}
 		<p>If you would like to report abuse of this relay, you can contact the administrator here:</p>
 		<p><code><pre>{{ .AdminContact }}</pre></code></p>
 	</body>
@@ -87,8 +95,9 @@ fieldset { border: 0; }
 	indexArgs := struct {
 		Domain       string
 		BasePath     string
+		RelayRules   []string
 		AdminContact string
-	}{domain, basePath, adminContact}
+	}{domain, basePath, relayRules, adminContact}
 	var b bytes.Buffer
 	err := chatmailIndexTmpl.Execute(&b, indexArgs)
 	if err != nil {
@@ -138,7 +147,9 @@ func (s server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "405 - method not allowed", http.StatusMethodNotAllowed)
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		chatmailIndex, err := templateIndex(r.Host, s.basePath, "admin@example.com")
+		abuseContactEmail := mox.Conf.Dynamic.Chatmail.AbuseContactEmail
+		relayRules := mox.Conf.Dynamic.Chatmail.RelayRules
+		chatmailIndex, err := templateIndex(r.Host, s.basePath, abuseContactEmail, relayRules)
 		if err != nil {
 			http.Error(w, "500 - internal server error", http.StatusInternalServerError)
 		}
