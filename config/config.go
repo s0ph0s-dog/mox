@@ -183,17 +183,17 @@ type Listener struct {
 		Port           int  `sconf:"optional" sconf-doc:"Default 993."`
 		EnabledOnHTTPS bool `sconf:"optional" sconf-doc:"Additionally enable IMAP on HTTPS port 443 via TLS ALPN. TLS Application Layer Protocol Negotiation allows clients to request a specific protocol from the server as part of the TLS connection setup. When this setting is enabled and a client requests the 'imap' protocol after TLS, it will be able to talk IMAP to Mox on port 443. This is meant to be useful as a censorship circumvention technique for Delta Chat."`
 	} `sconf:"optional" sconf-doc:"IMAP over TLS for reading email, by email applications. Requires a TLS config."`
-	AccountHTTP  WebService `sconf:"optional" sconf-doc:"Account web interface, for email users wanting to change their accounts, e.g. set new password, set new delivery rulesets. Default path is /."`
-	AccountHTTPS WebService `sconf:"optional" sconf-doc:"Account web interface listener like AccountHTTP, but for HTTPS. Requires a TLS config."`
-	AdminHTTP    WebService `sconf:"optional" sconf-doc:"Admin web interface, for managing domains, accounts, etc. Default path is /admin/. Preferably only enable on non-public IPs. Hint: use 'ssh -L 8080:localhost:80 you@yourmachine' and open http://localhost:8080/admin/, or set up a tunnel (e.g. WireGuard) and add its IP to the mox 'internal' listener."`
-	AdminHTTPS   WebService `sconf:"optional" sconf-doc:"Admin web interface listener like AdminHTTP, but for HTTPS. Requires a TLS config."`
-	WebmailHTTP  WebService `sconf:"optional" sconf-doc:"Webmail client, for reading email. Default path is /webmail/."`
-	WebmailHTTPS WebService `sconf:"optional" sconf-doc:"Webmail client, like WebmailHTTP, but for HTTPS. Requires a TLS config."`
-	WebAPIHTTP   WebService `sconf:"optional" sconf-doc:"Like WebAPIHTTPS, but with plain HTTP, without TLS."`
-	WebAPIHTTPS  WebService `sconf:"optional" sconf-doc:"WebAPI, a simple HTTP/JSON-based API for email, with HTTPS (requires a TLS config). Default path is /webapi/."`
-	ChatmailHTTP WebService `sconf:"optional" sconf-doc:"Like ChatmailHTTPS, but with plain HTTP, without TLS."`
+	AccountHTTP   WebService `sconf:"optional" sconf-doc:"Account web interface, for email users wanting to change their accounts, e.g. set new password, set new delivery rulesets. Default path is /."`
+	AccountHTTPS  WebService `sconf:"optional" sconf-doc:"Account web interface listener like AccountHTTP, but for HTTPS. Requires a TLS config."`
+	AdminHTTP     WebService `sconf:"optional" sconf-doc:"Admin web interface, for managing domains, accounts, etc. Default path is /admin/. Preferably only enable on non-public IPs. Hint: use 'ssh -L 8080:localhost:80 you@yourmachine' and open http://localhost:8080/admin/, or set up a tunnel (e.g. WireGuard) and add its IP to the mox 'internal' listener."`
+	AdminHTTPS    WebService `sconf:"optional" sconf-doc:"Admin web interface listener like AdminHTTP, but for HTTPS. Requires a TLS config."`
+	WebmailHTTP   WebService `sconf:"optional" sconf-doc:"Webmail client, for reading email. Default path is /webmail/."`
+	WebmailHTTPS  WebService `sconf:"optional" sconf-doc:"Webmail client, like WebmailHTTP, but for HTTPS. Requires a TLS config."`
+	WebAPIHTTP    WebService `sconf:"optional" sconf-doc:"Like WebAPIHTTPS, but with plain HTTP, without TLS."`
+	WebAPIHTTPS   WebService `sconf:"optional" sconf-doc:"WebAPI, a simple HTTP/JSON-based API for email, with HTTPS (requires a TLS config). Default path is /webapi/."`
+	ChatmailHTTP  WebService `sconf:"optional" sconf-doc:"Like ChatmailHTTPS, but with plain HTTP, without TLS."`
 	ChatmailHTTPS WebService `sconf:"optional" sconf-doc:"Serve a chatmail relay account signup page.  Default path is /."`
-	MetricsHTTP  struct {
+	MetricsHTTP   struct {
 		Enabled bool
 		Port    int `sconf:"optional" sconf-doc:"Default 8010."`
 	} `sconf:"optional" sconf-doc:"Serve prometheus metrics, for monitoring. You should not enable this on a public IP."`
@@ -455,6 +455,7 @@ type Account struct {
 	NoFirstTimeSenderDelay       bool                   `sconf:"optional" sconf-doc:"Do not apply a delay to SMTP connections before accepting an incoming message from a first-time sender. Can be useful for accounts that sends automated responses and want instant replies."`
 	NoCustomPassword             bool                   `sconf:"optional" sconf-doc:"If set, this account cannot set a password of their own choice, but can only set a new randomly generated password, preventing password reuse across services and use of weak passwords. Custom account passwords can be set by the admin."`
 	IMAPCapabilitiesDisabled     []string               `sconf:"optional" sconf-doc:"IMAP capabilities (upper-case) to disable on the connection after authentication. Useful if the account uses an email client with an incompatible implementation for a capability/extension."`
+	ChatmailEnabled              bool                   `sconf:"optional" sconf-doc:"If set, this account is used for chatmail. This imposes strict data retention limits in order to maintain privacy guarantees. Note: the *point* of this option is to *intentionally* cause data loss. DO NOT enable it on an existing account unless you are sure YOU WANT TO LOSE DATA. Disabling it on an account being used for chatmail weakens privacy controls and is therefore not recommended."`
 	// We will not work around client incompatibilities based on client software. ../rfc/2971:93
 
 	Routes []Route `sconf:"optional" sconf-doc:"Routes for delivering outgoing messages through the queue. Each delivery attempt evaluates these account routes, domain routes and finally global routes. The transport of the first matching route is used in the delivery attempt. If no routes match, which is the default with no configured routes, messages are delivered directly from the queue."`
@@ -670,6 +671,6 @@ type Chatmail struct {
 	AutoregistrationDisabled bool     `sconf:"optional" sconf-doc:"Prevent the automatic creation of new chatmail accounts. Normally, chatmail accounts can be created by simply logging in to the server with an unused username and a password.  If the server is under attack, being abused, or you simply don't want to allow just anyone to create an account, set this to true."`
 	AllowPlaintextFrom       []string `sconf:"optional" sconf-doc:"A list of addresses which are always allowed to send plaintext email."`
 	AllowPlaintextTo         []string `sconf:"optional" sconf-doc:"A list of addresses which are always allowed to receive plaintext mail. You should put your postmaster account here, otherwise you will not be able to receive abuse reports, delivery status notices, etc."`
-	RelayRules							 []string `sconf:"optional" sconf-doc:"A list of rules for users of this chatmail relay."`
-	AbuseContactEmail				 string `sconf:"required" sconf-doc:"The email address where people can report abuse of your chatmail relay."`
+	RelayRules               []string `sconf:"optional" sconf-doc:"A list of rules for users of this chatmail relay."`
+	AbuseContactEmail        string   `sconf:"required" sconf-doc:"The email address where people can report abuse of your chatmail relay."`
 }

@@ -8,7 +8,7 @@ FROM alpine:latest
 WORKDIR /mox
 COPY --from=build /build/mox /bin/mox
 
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata && adduser -h /var/empty -H -D -s /bin/false mox
 
 # SMTP for incoming message delivery.
 EXPOSE 25/tcp

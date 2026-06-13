@@ -799,8 +799,10 @@ type DiskUsage struct {
 
 // SessionToken and CSRFToken are types to prevent mixing them up.
 // Base64 raw url encoded.
-type SessionToken string
-type CSRFToken string
+type (
+	SessionToken string
+	CSRFToken    string
+)
 
 // LoginSession represents a login session. We keep a limited number of sessions
 // for a user, removing the oldest session when a new one is created.
@@ -1145,10 +1147,10 @@ func OpenAccountDB(log mlog.Log, accountDir, accountName string) (a *Account, re
 	isNew := false
 	if _, err := os.Stat(dbpath); err != nil && os.IsNotExist(err) {
 		isNew = true
-		os.MkdirAll(accountDir, 0770)
+		os.MkdirAll(accountDir, 0o770)
 	}
 
-	opts := bstore.Options{Timeout: 5 * time.Second, Perm: 0660, RegisterLogger: moxvar.RegisterLogger(dbpath, log.Logger)}
+	opts := bstore.Options{Timeout: 5 * time.Second, Perm: 0o660, RegisterLogger: moxvar.RegisterLogger(dbpath, log.Logger)}
 	db, err := bstore.Open(context.TODO(), dbpath, &opts, DBTypes...)
 	if err != nil {
 		return nil, err
@@ -1926,7 +1928,7 @@ func (a *Account) CheckConsistency() error {
 			}
 			dbpath := filepath.Join(mox.DataDirPath("tmp"), fmt.Sprintf("junkfilter-check-%x.db", random))
 			bloompath := filepath.Join(mox.DataDirPath("tmp"), fmt.Sprintf("junkfilter-check-%x.bloom", random))
-			os.MkdirAll(filepath.Dir(dbpath), 0700)
+			os.MkdirAll(filepath.Dir(dbpath), 0o700)
 			defer func() {
 				err := os.Remove(bloompath)
 				log.Check(err, "removing temp bloom file")
@@ -2460,7 +2462,7 @@ func (a *Account) MessageAdd(log mlog.Log, tx *bstore.Tx, mb *Mailbox, m *Messag
 	msgPath := a.MessagePath(m.ID)
 	msgDir := filepath.Dir(msgPath)
 	if a.lastMsgDir != msgDir {
-		os.MkdirAll(msgDir, 0770)
+		os.MkdirAll(msgDir, 0o770)
 		if err := moxio.SyncDir(log, msgDir); err != nil {
 			return fmt.Errorf("sync message dir: %w", err)
 		}
@@ -3330,6 +3332,33 @@ func CheckAddressAvailable(addr smtp.Address) error {
 	return nil
 }
 
+func CleanAcccounts(log mlog.Log, maxAcctAge, maxMsgAge time.Time) (rerr error) {
+	c := mox.Conf.Dynamic
+	ctx := context.Background()
+	for name, acctConf := range c.Accounts {
+		if !acctConf.ChatmailEnabled {
+			continue
+		}
+		acct, err := OpenAccount(log, name, false)
+		if err != nil {
+			log.Warn("unable to open account for cleaning", slog.String("name", name), slog.Any("err", err))
+			continue
+		}
+		// TODO: account cleanup
+		var mbl []store.Mailbox
+		acct.WithRLock(func() {
+			// Now a read-only transaction we'll use during the query.
+			qtx, err := acct.DB.Begin(ctx, false)
+			xcheckf(ctx, err, "begin transaction")
+
+			mbl, err = bstore.QueryTx[store.Mailbox](qtx).FilterEqual("Expunged", false).List()
+			xcheckf(ctx, err, "list mailboxes")
+		})
+		// For each mailbox, grab the read lock, query for messages older than maxMsgAge, delete.
+	}
+	return
+}
+
 // AccountAdd adds an account and an initial address and reloads the configuration.
 //
 // The new account does not have a password, so cannot yet log in. Email can be
@@ -3565,8 +3594,10 @@ func OpenEmail(log mlog.Log, email string, checkLoginDisabled bool) (*Account, s
 // We store max 1<<shift files in each subdir of an account "msg" directory.
 // Defaults to 1 for easy use in tests. Set to 13, for 8k message files, in main
 // for normal operation.
-var msgFilesPerDirShift = 1
-var msgFilesPerDir int64 = 1 << msgFilesPerDirShift
+var (
+	msgFilesPerDirShift       = 1
+	msgFilesPerDir      int64 = 1 << msgFilesPerDirShift
+)
 
 func MsgFilesPerDirShiftSet(shift int) {
 	msgFilesPerDirShift = shift
