@@ -1994,7 +1994,7 @@ const index = async () => {
 		e.stopPropagation();
 		await check(fieldset, client.DomainAdd(disabled.checked, domain.value, account.value, localpart.value));
 		window.location.hash = '#domains/' + domain.value;
-	}, fieldset = dom.fieldset(dom.label(style({ display: 'inline-block' }), dom.span('Domain', attr.title('Domain for incoming/outgoing email to add to mox. Can also be a subdomain of a domain already configured.')), dom.br(), domain = dom.input(attr.required(''))), ' ', dom.label(style({ display: 'inline-block' }), dom.span('Postmaster/reporting account', attr.title('Account that is considered the owner of this domain. If the account does not yet exist, it will be created and a a localpart is required for the initial email address.')), dom.br(), account = dom.input(attr.required(''), attr.list('accountList')), dom.datalist(attr.id('accountList'), (accounts || []).map(a => dom.option(attr.value(a), a + (accountsDisabled?.includes(a) ? ' (disabled)' : ''))))), ' ', dom.label(style({ display: 'inline-block' }), dom.span('Localpart (if new account)', attr.title('Must be set if and only if account does not yet exist. A localpart is the part before the "@"-sign of an email address. An account requires an email address, so creating a new account for a domain requires a localpart to form an initial email address.')), dom.br(), localpart = dom.input()), ' ', dom.label(disabled = dom.input(attr.type('checkbox')), ' Disabled', attr.title('Disabled domains do fetch new certificates with ACME and do not accept incoming or outgoing messages involving the domain. Accounts and addresses referencing a disabled domain can be created. USeful during/before migrations.')), ' ', dom.submitbutton('Add domain', attr.title('Domain will be added and the config reloaded. Add the required DNS records after adding the domain.')))), dom.br(), dom.h2('Reports'), dom.div(dom.a('DMARC', attr.href('#dmarc/reports'))), dom.div(dom.a('TLS', attr.href('#tlsrpt/reports'))), dom.br(), dom.h2('Operations'), dom.div(dom.a('MTA-STS policies', attr.href('#mtasts'))), dom.div(dom.a('DMARC evaluations', attr.href('#dmarc/evaluations'))), dom.div(dom.a('TLS connection results', attr.href('#tlsrpt/results'))), dom.div(dom.a('DNSBL', attr.href('#dnsbl'))), dom.div(style({ marginTop: '.5ex' }), dom.form(async function submit(e) {
+	}, fieldset = dom.fieldset(dom.label(style({ display: 'inline-block' }), dom.span('Domain', attr.title('Domain for incoming/outgoing email to add to mox. Can also be a subdomain of a domain already configured.')), dom.br(), domain = dom.input(attr.required(''))), ' ', dom.label(style({ display: 'inline-block' }), dom.span('Postmaster/reporting account', attr.title('Account that is considered the owner of this domain. If the account does not yet exist, it will be created and a a localpart is required for the initial email address.')), dom.br(), account = dom.input(attr.required(''), attr.list('accountList')), dom.datalist(attr.id('accountList'), (accounts || []).map(a => dom.option(attr.value(a), a + (accountsDisabled?.includes(a) ? ' (disabled)' : ''))))), ' ', dom.label(style({ display: 'inline-block' }), dom.span('Localpart (if new account)', attr.title('Must be set if and only if account does not yet exist. A localpart is the part before the "@"-sign of an email address. An account requires an email address, so creating a new account for a domain requires a localpart to form an initial email address.')), dom.br(), localpart = dom.input()), ' ', dom.label(disabled = dom.input(attr.type('checkbox')), ' Disabled', attr.title('Disabled domains do fetch new certificates with ACME and do not accept incoming or outgoing messages involving the domain. Accounts and addresses referencing a disabled domain can be created. Useful during/before migrations.')), ' ', dom.submitbutton('Add domain', attr.title('Domain will be added and the config reloaded. Add the required DNS records after adding the domain.')))), dom.br(), dom.h2('Reports'), dom.div(dom.a('DMARC', attr.href('#dmarc/reports'))), dom.div(dom.a('TLS', attr.href('#tlsrpt/reports'))), dom.br(), dom.h2('Operations'), dom.div(dom.a('MTA-STS policies', attr.href('#mtasts'))), dom.div(dom.a('DMARC evaluations', attr.href('#dmarc/evaluations'))), dom.div(dom.a('TLS connection results', attr.href('#tlsrpt/results'))), dom.div(dom.a('DNSBL', attr.href('#dnsbl'))), dom.div(style({ marginTop: '.5ex' }), dom.form(async function submit(e) {
 		e.preventDefault();
 		e.stopPropagation();
 		dom._kids(cidElem);
@@ -3889,6 +3889,7 @@ const webserver = async () => {
 	let handlerRows = [];
 	let handlersTbody;
 	let nohandler;
+	let moveButtonsVisible = false;
 	// Make a handler row. This is more complicated, since it can be one of the three
 	// types (static, redirect, forward), and can change between those types.
 	const handlerRow = (wh) => {
@@ -4043,7 +4044,7 @@ const webserver = async () => {
 			nohandler.style.display = handlerRows.length ? 'none' : '';
 		}), ' ', 
 		// We show/hide the buttons to move when clicking the Move button.
-		moveButtons = dom.span(style({ display: 'none' }), dom.clickbutton('↑↑', attr.title('Move to top.'), function click() {
+		moveButtons = dom.span(style({ display: moveButtonsVisible ? '' : 'none' }), dom.clickbutton('↑↑', attr.title('Move to top.'), function click() {
 			const index = handlerRows.findIndex(r => r === row);
 			if (index > 0) {
 				moveHandler(row, index, 0);
@@ -4146,8 +4147,9 @@ const webserver = async () => {
 			}),
 			' ',
 			dom.clickbutton('Move', function click() {
+				moveButtonsVisible = !moveButtonsVisible;
 				for (const row of handlerRows) {
-					row.moveButtons.style.display = row.moveButtons.style.display === 'none' ? '' : 'none';
+					row.moveButtons.style.display = moveButtonsVisible ? '' : 'none';
 				}
 			}),
 		];

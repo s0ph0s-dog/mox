@@ -417,7 +417,7 @@ func usage(l []cmd, unlisted bool) {
 		if c.unlisted && !unlisted {
 			continue
 		}
-		for _, line := range strings.Split(c.params, "\n") {
+		for line := range strings.SplitSeq(c.params, "\n") {
 			x := append([]string{"mox"}, c.words...)
 			if line != "" {
 				x = append(x, line)
@@ -1226,9 +1226,7 @@ error too, for reference.
 	prefix := stem + "." + timestamp
 
 	seed := make([]byte, ed25519.SeedSize)
-	if _, err := cryptorand.Read(seed); err != nil {
-		panic(err)
-	}
+	cryptorand.Read(seed)
 	privKey := ed25519.NewKeyFromSeed(seed)
 	privKeyBuf, err := x509.MarshalPKCS8PrivateKey(privKey)
 	xcheckf(err, "marshal private key as pkcs8")
@@ -2010,7 +2008,7 @@ exchanged during connection set up.
 		tlsConfig.RootCAs = pool
 	}
 	if tlsCiphersuites != "" {
-		for _, s := range strings.Split(tlsCiphersuites, ",") {
+		for s := range strings.SplitSeq(tlsCiphersuites, ",") {
 			s = strings.TrimSpace(s)
 			c, ok := ciphersuites[s]
 			if !ok {
@@ -2023,7 +2021,7 @@ exchanged during connection set up.
 		}
 	}
 	if tlsCurves != "" {
-		for _, s := range strings.Split(tlsCurves, ",") {
+		for s := range strings.SplitSeq(tlsCurves, ",") {
 			s = strings.TrimSpace(s)
 			if c, ok := curves[s]; !ok {
 				log.Fatalf("unknown ecc key exchange algorithm %q", s)
@@ -2130,7 +2128,7 @@ connection.
 
 	allowedUsages := []adns.TLSAUsage{}
 	if usages != "" {
-		for _, s := range strings.Split(usages, ",") {
+		for s := range strings.SplitSeq(usages, ",") {
 			var usage adns.TLSAUsage
 			switch strings.ToLower(s) {
 			case "pkix-ta", strconv.Itoa(int(adns.TLSAUsagePKIXTA)):
@@ -2979,7 +2977,7 @@ address must opt-in to receiving DMARC reports by creating a DMARC record at
 
 		u, err := url.Parse(addr)
 		if err != nil {
-			printResult("parsing uri: %v (skipping)", addr, err)
+			printResult("parsing uri %s: %v (skipping)", addr, err)
 			return
 		}
 		var destdom dns.Domain

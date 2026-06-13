@@ -7,10 +7,10 @@ build0:
 	CGO_ENABLED=0 go build
 	CGO_ENABLED=0 go vet ./...
 	./gendoc.sh
-	./genapidoc.sh
-	./gents.sh webadmin/api.json webadmin/api.ts
-	./gents.sh webaccount/api.json webaccount/api.ts
-	./gents.sh webmail/api.json webmail/api.ts
+	CGO_ENABLED=0 ./genapidoc.sh
+	CGO_ENABLED=0 ./gents.sh webadmin/api.json webadmin/api.ts
+	CGO_ENABLED=0 ./gents.sh webaccount/api.json webaccount/api.ts
+	CGO_ENABLED=0 ./gents.sh webmail/api.json webmail/api.ts
 
 build1:
 	# build again, api json files above are embedded and new frontend code generated
@@ -93,6 +93,10 @@ govendor:
 	go mod tidy
 	go mod vendor
 	./genlicenses.sh
+
+modernize:
+	# skip slicescontains because it rewrites to unintuitive slices.ContainsFunc
+	go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest -category=-slicescontains -fix -test ./...
 
 test-integration:
 	-docker compose -f docker-compose-integration.yml kill

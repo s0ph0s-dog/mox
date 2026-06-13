@@ -294,15 +294,11 @@ func DKIMAdd(ctx context.Context, domain, selector dns.Domain, algorithm, hash s
 	// All good, time to update the config.
 	nd := d
 	nd.DKIM.Selectors = map[string]config.Selector{}
-	for name, osel := range d.DKIM.Selectors {
-		nd.DKIM.Selectors[name] = osel
-	}
+	maps.Copy(nd.DKIM.Selectors, d.DKIM.Selectors)
 	nd.DKIM.Selectors[selector.Name()] = nsel
 	nc := c
 	nc.Domains = map[string]config.Domain{}
-	for name, dom := range c.Domains {
-		nc.Domains[name] = dom
-	}
+	maps.Copy(nc.Domains, c.Domains)
 	nc.Domains[domain.Name()] = nd
 
 	if err := mox.WriteDynamicLocked(ctx, log, nc); err != nil {
@@ -355,9 +351,7 @@ func DKIMRemove(ctx context.Context, domain, selector dns.Domain) (rerr error) {
 	nd.DKIM = config.DKIM{Selectors: nsels, Sign: nsign}
 	nc := c
 	nc.Domains = map[string]config.Domain{}
-	for name, dom := range c.Domains {
-		nc.Domains[name] = dom
-	}
+	maps.Copy(nc.Domains, c.Domains)
 	nc.Domains[domain.Name()] = nd
 
 	if err := mox.WriteDynamicLocked(ctx, log, nc); err != nil {
@@ -402,9 +396,7 @@ func DomainAdd(ctx context.Context, disabled bool, domain dns.Domain, accountNam
 	// leave no trace.
 	nc := c
 	nc.Domains = map[string]config.Domain{}
-	for name, d := range c.Domains {
-		nc.Domains[name] = d
-	}
+	maps.Copy(nc.Domains, c.Domains)
 
 	// Only enable mta-sts for domain if there is a listener with mta-sts.
 	var withMTASTS bool
@@ -438,9 +430,7 @@ func DomainAdd(ctx context.Context, disabled bool, domain dns.Domain, accountNam
 	} else if accountName != mox.Conf.Static.Postmaster.Account {
 		nacc := nc.Accounts[accountName]
 		nd := map[string]config.Destination{}
-		for k, v := range nacc.Destinations {
-			nd[k] = v
-		}
+		maps.Copy(nd, nacc.Destinations)
 		pmaddr := smtp.NewAddress("postmaster", domain)
 		nd[pmaddr.String()] = config.Destination{}
 		nacc.Destinations = nd
@@ -569,9 +559,7 @@ func DomainSave(ctx context.Context, domainName string, xmodify func(config *con
 	// Compose new config without modifying existing data structures. If we fail, we
 	// leave no trace.
 	nc.Domains = map[string]config.Domain{}
-	for name, d := range mox.Conf.Dynamic.Domains {
-		nc.Domains[name] = d
-	}
+	maps.Copy(nc.Domains, mox.Conf.Dynamic.Domains)
 	nc.Domains[domainName] = dom
 
 	if err := mox.WriteDynamicLocked(ctx, log, nc); err != nil {
@@ -739,13 +727,9 @@ func AddressAdd(ctx context.Context, address, account string) (rerr error) {
 	// leave no trace.
 	nc := c
 	nc.Accounts = map[string]config.Account{}
-	for name, a := range c.Accounts {
-		nc.Accounts[name] = a
-	}
+	maps.Copy(nc.Accounts, c.Accounts)
 	nd := map[string]config.Destination{}
-	for name, d := range a.Destinations {
-		nd[name] = d
-	}
+	maps.Copy(nd, a.Destinations)
 	nd[destAddr] = config.Destination{}
 	a.Destinations = nd
 	nc.Accounts[account] = a
@@ -914,9 +898,7 @@ func AddressRemove(ctx context.Context, address string) (rerr error) {
 
 	nc := mox.Conf.Dynamic
 	nc.Accounts = map[string]config.Account{}
-	for name, a := range mox.Conf.Dynamic.Accounts {
-		nc.Accounts[name] = a
-	}
+	maps.Copy(nc.Accounts, mox.Conf.Dynamic.Accounts)
 	nc.Accounts[ad.Account] = na
 	nc.Domains = domains
 
@@ -1036,9 +1018,7 @@ func AccountSave(ctx context.Context, account string, xmodify func(acc *config.A
 	// leave no trace.
 	nc := c
 	nc.Accounts = map[string]config.Account{}
-	for name, a := range c.Accounts {
-		nc.Accounts[name] = a
-	}
+	maps.Copy(nc.Accounts, c.Accounts)
 	nc.Accounts[account] = acc
 
 	if err := mox.WriteDynamicLocked(ctx, log, nc); err != nil {

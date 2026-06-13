@@ -248,8 +248,7 @@ func (w Admin) LoginPrep(ctx context.Context) string {
 	reqInfo := ctx.Value(requestInfoCtxKey).(requestInfo)
 
 	var data [8]byte
-	_, err := cryptorand.Read(data[:])
-	xcheckf(ctx, err, "generate token")
+	cryptorand.Read(data[:])
 	loginToken := base64.RawURLEncoding.EncodeToString(data[:])
 
 	webauth.LoginPrep(ctx, log, "webadmin", w.cookiePath, w.isForwarded, reqInfo.Response, reqInfo.Request, loginToken)
@@ -942,11 +941,11 @@ EOF
 			for _, r := range records {
 				instr += fmt.Sprintf("\t_25._tcp.%s. TLSA %s\n", pubDom.ASCII, r)
 			}
-			addf(&r.DANE.Instructions, instr)
+			addf(&r.DANE.Instructions, "%s", instr)
 		} else {
 			addf(&r.DANE.Warnings, "DANE not configured: no static TLS host keys.")
 
-			instr := "Add static TLS keys for use with DANE to mox.conf under: Listeners, public, TLS, HostPrivateKeyFiles.\n\nIf automatic TLS certificate management with ACME is configured, run \"mox config ensureacmehostprivatekeys\" to generate static TLS keys and to print a snippet for \"HostPrivateKeyFiles\" for inclusion in mox.conf.\n\nIf TLS keys and certificates are managed externally, configure the TLS keys manually under \"HostPrivateKeyFiles\" in mox.conf, and make sure new TLS keys are not generated for each new certificate (look for an option to \"reuse private keys\" when doing ACME). Important: Before using new TLS keys, corresponding new DANE (TLSA) DNS records must be published (taking TTL into account to let the previous records expire). Using new TLS keys without updating DANE (TLSA) DNS records will cause DANE verification failures, breaking incoming deliveries.\n\nWith \"HostPrivateKeyFiles\" configured, DNS records for DANE based on those TLS keys will be suggested, and future DNS checks will look for those DNS records. Once those DNS records are published, DANE is active for all domains with an MX record pointing to the host."
+			const instr = "Add static TLS keys for use with DANE to mox.conf under: Listeners, public, TLS, HostPrivateKeyFiles.\n\nIf automatic TLS certificate management with ACME is configured, run \"mox config ensureacmehostprivatekeys\" to generate static TLS keys and to print a snippet for \"HostPrivateKeyFiles\" for inclusion in mox.conf.\n\nIf TLS keys and certificates are managed externally, configure the TLS keys manually under \"HostPrivateKeyFiles\" in mox.conf, and make sure new TLS keys are not generated for each new certificate (look for an option to \"reuse private keys\" when doing ACME). Important: Before using new TLS keys, corresponding new DANE (TLSA) DNS records must be published (taking TTL into account to let the previous records expire). Using new TLS keys without updating DANE (TLSA) DNS records will cause DANE verification failures, breaking incoming deliveries.\n\nWith \"HostPrivateKeyFiles\" configured, DNS records for DANE based on those TLS keys will be suggested, and future DNS checks will look for those DNS records. Once those DNS records are published, DANE is active for all domains with an MX record pointing to the host."
 			addf(&r.DANE.Instructions, instr)
 		}
 	}()
@@ -1192,9 +1191,9 @@ EOF
 			addf(&r.DMARC.Instructions, `Configure a DMARC destination in domain in config file.`)
 		}
 		instr := fmt.Sprintf("Ensure a DNS TXT record like the following exists:\n\n\t_dmarc.%s TXT %s\n\nYou can start with testing mode by replacing p=reject with p=none. You can also request for the policy to be applied to a percentage of emails instead of all, by adding pct=X, with X between 0 and 100. Keep in mind that receiving mail servers will apply some anti-spam assessment regardless of the policy and whether it is applied to the message. The ruf= part requests daily aggregate reports to be sent to the specified address, which is automatically configured and reports automatically analyzed.", domain.ASCII+".", mox.TXTStrings(dmarcr.String()))
-		addf(&r.DMARC.Instructions, instr)
+		addf(&r.DMARC.Instructions, "%s", instr)
 		if extInstr != "" {
-			addf(&r.DMARC.Instructions, extInstr)
+			addf(&r.DMARC.Instructions, "%s", extInstr)
 		}
 	}()
 
@@ -1264,7 +1263,7 @@ HostTLSRPT:
 		} else {
 			addf(&result.Errors, `Configure a TLSRPT destination for the domain (through the admin web interface or by editing the domains.conf config file, adding a TLSRPT section) and check again for instructions for the TLSRPT DNS record.`)
 		}
-		addf(&result.Instructions, instr)
+		addf(&result.Instructions, "%s", instr)
 	}
 
 	// Host TLSRPT
@@ -1344,7 +1343,7 @@ HostTLSRPT:
 					continue
 				}
 				if _, ok := mxs[mx.Domain]; !ok {
-					addf(&r.MTASTS.Warnings, "MX %q in MTA-STS policy is not in MX record.", mx)
+					addf(&r.MTASTS.Warnings, "MX %q in MTA-STS policy is not in MX record.", mx.LogString())
 				}
 			}
 		}
@@ -1361,19 +1360,19 @@ The _mta-sts DNS TXT record has an "id" field. The id serves as a version of the
 
 When enabling MTA-STS, or updating a policy, always update the policy first (through a configuration change and reload/restart), and the DNS record second.
 `
-		addf(&r.MTASTS.Instructions, intro)
+		addf(&r.MTASTS.Instructions, "%s", intro)
 
 		addf(&r.MTASTS.Instructions, `Enable a policy through the configuration file. For new deployments, it is best to start with mode "testing" while enabling TLSRPT. Start with a short "max_age", so updates to your policy are picked up quickly. When confidence in the deployment is high enough, switch to "enforce" mode and a longer "max age". A max age in the order of weeks is recommended. If you foresee a change to your setup in the future, requiring different policies or MX records, you may want to dial back the "max age" ahead of time, similar to how you would handle TTL's in DNS record updates.`)
 
 		host := fmt.Sprintf("Ensure DNS CNAME/A/AAAA records exist that resolves mta-sts.%s to this mail server. For example:\n\n\tmta-sts.%s CNAME %s\n\n", domain.ASCII, domain.ASCII+".", mox.Conf.Static.HostnameDomain.ASCII+".")
-		addf(&r.MTASTS.Instructions, host)
+		addf(&r.MTASTS.Instructions, "%s", host)
 
 		mtastsr := mtasts.Record{
 			Version: "STSv1",
 			ID:      time.Now().Format("20060102T150405"),
 		}
 		dns := fmt.Sprintf("Ensure a DNS TXT record like the following exists:\n\n\t_mta-sts.%s TXT %s\n\nConfigure the ID in the configuration file, it must be of the form [a-zA-Z0-9]{1,31}. It represents the version of the policy. For each policy change, you must change the ID to a new unique value. You could use a timestamp like 20220621T123000. When this field exists, an SMTP server will fetch a policy at https://mta-sts.%s/.well-known/mta-sts.txt. This policy is served by mox.", domain.ASCII+".", mox.TXTStrings(mtastsr.String()), domain.Name())
-		addf(&r.MTASTS.Instructions, dns)
+		addf(&r.MTASTS.Instructions, "%s", dns)
 	}()
 
 	// SRVConf
@@ -1385,7 +1384,10 @@ When enabling MTA-STS, or updating a policy, always update the policy first (thr
 		type srvReq struct {
 			name string
 			port uint16
-			host string
+			// First entry is host we suggest and prefer, but we won't complain if the current
+			// value is one of the later values, to account for historic values we suggested
+			// that aren't wrong and we don't want to bother admins with.
+			host []string
 			srvs []*net.SRV
 			err  error
 		}
@@ -1401,24 +1403,30 @@ When enabling MTA-STS, or updating a policy, always update the policy first (thr
 				imaps = true
 			}
 		}
-		srvhost := func(ok bool) string {
-			if ok {
-				return mox.Conf.Static.HostnameDomain.ASCII + "."
+		srvhost := func(ok bool) []string {
+			if !ok {
+				return []string{"."}
 			}
-			return "."
+			if domConf.ClientSettingsDomain != "" {
+				return []string{
+					domConf.ClientSettingsDNSDomain.ASCII + ".",
+					mox.Conf.Static.HostnameDomain.ASCII + ".",
+				}
+			}
+			return []string{mox.Conf.Static.HostnameDomain.ASCII + "."}
 		}
 		var reqs = []srvReq{
 			{name: "_submissions", port: 465, host: srvhost(submissions)},
 			{name: "_submission", port: 587, host: srvhost(!submissions)},
 			{name: "_imaps", port: 993, host: srvhost(imaps)},
 			{name: "_imap", port: 143, host: srvhost(!imaps)},
-			{name: "_pop3", port: 110, host: "."},
-			{name: "_pop3s", port: 995, host: "."},
+			{name: "_pop3", port: 110, host: []string{"."}},
+			{name: "_pop3s", port: 995, host: []string{"."}},
 		}
 		// Host "." indicates the service is not available. We suggested in the DNS records
 		// that the port be set to 0, so check for that. ../rfc/6186:242
 		for i := range reqs {
-			if reqs[i].host == "." {
+			if reqs[i].host[0] == "." {
 				reqs[i].port = 0
 			}
 		}
@@ -1437,20 +1445,20 @@ When enabling MTA-STS, or updating a policy, always update the policy first (thr
 		for _, req := range reqs {
 			name := req.name + "._tcp." + domain.ASCII
 			weight := 1
-			if req.host == "." {
+			if req.host[0] == "." {
 				weight = 0
 			}
-			instr += fmt.Sprintf("\t%s._tcp.%-*s SRV 0 %d %d %s\n", req.name, len("_submissions")-len(req.name)+len(domain.ASCII+"."), domain.ASCII+".", weight, req.port, req.host)
+			instr += fmt.Sprintf("\t%s._tcp.%-*s SRV 0 %d %d %s\n", req.name, len("_submissions")-len(req.name)+len(domain.ASCII+"."), domain.ASCII+".", weight, req.port, req.host[0])
 			r.SRVConf.SRVs[req.name] = unptr(req.srvs)
 			if req.err != nil {
 				addf(&r.SRVConf.Errors, "Looking up SRV record %q: %s", name, req.err)
 			} else if len(req.srvs) == 0 {
-				if req.host == "." {
+				if req.host[0] == "." {
 					addf(&r.SRVConf.Warnings, "Missing optional SRV record %q", name)
 				} else {
 					addf(&r.SRVConf.Errors, "Missing SRV record %q", name)
 				}
-			} else if len(req.srvs) != 1 || req.srvs[0].Target != req.host || req.srvs[0].Port != req.port {
+			} else if len(req.srvs) != 1 || !slices.Contains(req.host, req.srvs[0].Target) || req.srvs[0].Port != req.port {
 				var srvs []string
 				for _, srv := range req.srvs {
 					srvs = append(srvs, fmt.Sprintf("%d %d %d %s", srv.Priority, srv.Weight, srv.Port, srv.Target))
@@ -1458,7 +1466,7 @@ When enabling MTA-STS, or updating a policy, always update the policy first (thr
 				addf(&r.SRVConf.Errors, "Unexpected SRV record(s) for %q: %s", name, strings.Join(srvs, ", "))
 			}
 		}
-		addf(&r.SRVConf.Instructions, instr)
+		addf(&r.SRVConf.Instructions, "%s", instr)
 	}()
 
 	// Autoconf
@@ -1893,7 +1901,7 @@ func dnsblsStatus(ctx context.Context, log mlog.Log, resolver dns.Resolver) (res
 func (Admin) MonitorDNSBLsSave(ctx context.Context, text string) {
 	var zones []dns.Domain
 	publicZones := mox.Conf.Static.Listeners["public"].SMTP.DNSBLZones
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

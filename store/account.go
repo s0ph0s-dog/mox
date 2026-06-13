@@ -1923,9 +1923,7 @@ func (a *Account) CheckConsistency() error {
 		conf, _ := a.Conf()
 		if conf.JunkFilter != nil {
 			random := make([]byte, 16)
-			if _, err := cryptorand.Read(random); err != nil {
-				return fmt.Errorf("reading random: %v", err)
-			}
+			cryptorand.Read(random)
 			dbpath := filepath.Join(mox.DataDirPath("tmp"), fmt.Sprintf("junkfilter-check-%x.db", random))
 			bloompath := filepath.Join(mox.DataDirPath("tmp"), fmt.Sprintf("junkfilter-check-%x.bloom", random))
 			os.MkdirAll(filepath.Dir(dbpath), 0o700)
@@ -2579,11 +2577,17 @@ func (a *Account) SetPassword(log mlog.Log, password string) error {
 
 		pw.SCRAMSHA1.Salt = scram.MakeRandom()
 		pw.SCRAMSHA1.Iterations = 2 * 4096
-		pw.SCRAMSHA1.SaltedPassword = scram.SaltPassword(sha1.New, password, pw.SCRAMSHA1.Salt, pw.SCRAMSHA1.Iterations)
+		pw.SCRAMSHA1.SaltedPassword, err = scram.SaltPassword(sha1.New, password, pw.SCRAMSHA1.Salt, pw.SCRAMSHA1.Iterations)
+		if err != nil {
+			return fmt.Errorf("scram sha1 salt password: %w", err)
+		}
 
 		pw.SCRAMSHA256.Salt = scram.MakeRandom()
 		pw.SCRAMSHA256.Iterations = 4096
-		pw.SCRAMSHA256.SaltedPassword = scram.SaltPassword(sha256.New, password, pw.SCRAMSHA256.Salt, pw.SCRAMSHA256.Iterations)
+		pw.SCRAMSHA256.SaltedPassword, err = scram.SaltPassword(sha256.New, password, pw.SCRAMSHA256.Salt, pw.SCRAMSHA256.Iterations)
+		if err != nil {
+			return fmt.Errorf("scram sha256 salt password: %w", err)
+		}
 
 		if err := tx.Insert(&pw); err != nil {
 			return fmt.Errorf("inserting new password: %v", err)
@@ -2620,9 +2624,7 @@ func (a *Account) Subjectpass(email string) (key string, err error) {
 		key = ""
 		const chars = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		buf := make([]byte, 16)
-		if _, err := cryptorand.Read(buf); err != nil {
-			return err
-		}
+		cryptorand.Read(buf)
 		for _, b := range buf {
 			key += string(chars[int(b)%len(chars)])
 		}

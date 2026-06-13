@@ -99,8 +99,7 @@ func (w Webmail) LoginPrep(ctx context.Context) string {
 	log := reqInfo.Log
 
 	var data [8]byte
-	_, err := cryptorand.Read(data[:])
-	xcheckf(ctx, err, "generate token")
+	cryptorand.Read(data[:])
 	loginToken := base64.RawURLEncoding.EncodeToString(data[:])
 
 	webauth.LoginPrep(ctx, log, "webmail", w.cookiePath, w.isForwarded, reqInfo.Response, reqInfo.Request, loginToken)
@@ -581,11 +580,7 @@ func xrandomID(ctx context.Context, n int) string {
 
 func xrandom(ctx context.Context, n int) []byte {
 	buf := make([]byte, n)
-	x, err := cryptorand.Read(buf)
-	xcheckf(ctx, err, "read random")
-	if x != n {
-		xcheckf(ctx, errors.New("short random read"), "read random")
-	}
+	cryptorand.Read(buf)
 	return buf
 }
 
@@ -2003,9 +1998,7 @@ func (Webmail) RulesetAdd(ctx context.Context, rcptTo string, ruleset config.Rul
 		}
 
 		nd := map[string]config.Destination{}
-		for addr, d := range acc.Destinations {
-			nd[addr] = d
-		}
+		maps.Copy(nd, acc.Destinations)
 		dest.Rulesets = append(slices.Clone(dest.Rulesets), ruleset)
 		nd[rcptTo] = dest
 		acc.Destinations = nd
@@ -2023,9 +2016,7 @@ func (Webmail) RulesetRemove(ctx context.Context, rcptTo string, ruleset config.
 		}
 
 		nd := map[string]config.Destination{}
-		for addr, d := range acc.Destinations {
-			nd[addr] = d
-		}
+		maps.Copy(nd, acc.Destinations)
 		var l []config.Ruleset
 		skipped := 0
 		for _, rs := range dest.Rulesets {

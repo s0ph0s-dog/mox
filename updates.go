@@ -109,10 +109,9 @@ func cmdUpdatesGenkey(c *cmd) {
 	}
 
 	buf := make([]byte, ed25519.SeedSize)
-	_, err := cryptorand.Read(buf)
-	xcheckf(err, "generating key")
+	cryptorand.Read(buf)
 	enc := base64.NewEncoder(base64.StdEncoding, os.Stdout)
-	_, err = enc.Write(buf)
+	_, err := enc.Write(buf)
 	xcheckf(err, "writing private key")
 	err = enc.Close()
 	xcheckf(err, "writing private key")
@@ -217,9 +216,9 @@ func cmdUpdatesServe(c *cmd) {
 		if fromVersion != nil {
 		nextchange:
 			for i, c := range cl.Changes {
-				for _, line := range strings.Split(strings.Split(c.Text, "\n\n")[0], "\n") {
-					if strings.HasPrefix(line, "version:") {
-						v, err := updates.ParseVersion(strings.TrimSpace(strings.TrimPrefix(line, "version:")))
+				for line := range strings.SplitSeq(strings.Split(c.Text, "\n\n")[0], "\n") {
+					if after, ok := strings.CutPrefix(line, "version:"); ok {
+						v, err := updates.ParseVersion(strings.TrimSpace(after))
 						if err == nil && !v.After(*fromVersion) {
 							cl.Changes = cl.Changes[:i]
 							break nextchange
@@ -233,7 +232,7 @@ func cmdUpdatesServe(c *cmd) {
 		accept := r.Header.Get("Accept")
 		var html bool
 	accept:
-		for _, ac := range strings.Split(accept, ",") {
+		for ac := range strings.SplitSeq(accept, ",") {
 			var ok bool
 			for i, kv := range strings.Split(strings.TrimSpace(ac), ";") {
 				if i == 0 {

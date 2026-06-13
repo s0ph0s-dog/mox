@@ -399,7 +399,7 @@ const index = async () => {
 				dom.label(
 					disabled=dom.input(attr.type('checkbox')),
 					' Disabled',
-					attr.title('Disabled domains do fetch new certificates with ACME and do not accept incoming or outgoing messages involving the domain. Accounts and addresses referencing a disabled domain can be created. USeful during/before migrations.'),
+					attr.title('Disabled domains do fetch new certificates with ACME and do not accept incoming or outgoing messages involving the domain. Accounts and addresses referencing a disabled domain can be created. Useful during/before migrations.'),
 				),
 				' ',
 				dom.submitbutton('Add domain', attr.title('Domain will be added and the config reloaded. Add the required DNS records after adding the domain.')),
@@ -4760,6 +4760,7 @@ const webserver = async () => {
 	let handlerRows: HandlerRow[] = []
 	let handlersTbody: HTMLElement
 	let nohandler: HTMLElement
+	let moveButtonsVisible = false
 
 	type WebStaticView = {
 		root: HTMLElement
@@ -5155,7 +5156,7 @@ const webserver = async () => {
 					' ',
 					// We show/hide the buttons to move when clicking the Move button.
 					moveButtons=dom.span(
-						style({display: 'none'}),
+						style({display: moveButtonsVisible ? '' : 'none'}),
 						dom.clickbutton('↑↑', attr.title('Move to top.'), function click() {
 							const index = handlerRows.findIndex(r => r === row)
 							if (index > 0) {
@@ -5266,8 +5267,9 @@ const webserver = async () => {
 			}),
 			' ',
 			dom.clickbutton('Move', function click() {
+				moveButtonsVisible = !moveButtonsVisible
 				for(const row of handlerRows) {
-					row.moveButtons.style.display = row.moveButtons.style.display === 'none' ? '' : 'none'
+					row.moveButtons.style.display = moveButtonsVisible ? '' : 'none'
 				}
 			}),
 		]

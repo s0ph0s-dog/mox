@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -337,8 +338,7 @@ func (w Account) LoginPrep(ctx context.Context) string {
 	reqInfo := ctx.Value(requestInfoCtxKey).(requestInfo)
 
 	var data [8]byte
-	_, err := cryptorand.Read(data[:])
-	xcheckf(ctx, err, "generate token")
+	cryptorand.Read(data[:])
 	loginToken := base64.RawURLEncoding.EncodeToString(data[:])
 
 	webauth.LoginPrep(ctx, log, "webaccount", w.cookiePath, w.isForwarded, reqInfo.Response, reqInfo.Request, loginToken)
@@ -510,9 +510,7 @@ func (Account) DestinationSave(ctx context.Context, destName string, oldDest, ne
 
 		// Make copy of reference values.
 		nd := map[string]config.Destination{}
-		for dn, d := range conf.Destinations {
-			nd[dn] = d
-		}
+		maps.Copy(nd, conf.Destinations)
 		nd[destName] = newDest
 		conf.Destinations = nd
 	})
